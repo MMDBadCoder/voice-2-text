@@ -94,6 +94,25 @@ unsupported/insecure browsers offer file upload as a fallback. Each recording is
 limited to ten minutes to bound browser memory; add additional clips as needed.
 Do not close the tab while a local recording or upload is unsaved.
 
+## Recording over HTTP in Chrome
+
+The recorder checks whether the browser exposes `getUserMedia`; the application
+itself does not reject HTTP. Browsers normally withhold that API on remote HTTP
+origins. For an explicitly trusted HTTP installation, configure each Chrome client:
+
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+2. Add the application's exact origin, including its port (for example,
+   `http://195.248.240.141:8090`).
+3. Set the option to **Enabled**, relaunch Chrome, and reopen the application.
+4. Allow microphone access when starting a recording.
+
+This is a browser-side exception, not a server setting. It does not encrypt HTTP
+traffic and must be configured separately on each device. Browser versions that
+lack this option still need HTTPS or localhost. Leave `AUTH_COOKIE_SECURE=false`
+when using HTTP. Do not disable browser security globally.
+
+Source: [Chromium's documented origin exception](https://www.chromium.org/Home/chromium-security/deprecating-powerful-features-on-insecure-origins/).
+
 ## Multi-file sessions
 
 An open session accepts ordered audio clips and does not start ASR. Uploads use

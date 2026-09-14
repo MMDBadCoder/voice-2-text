@@ -18,7 +18,7 @@
   $('record-start').addEventListener('click',async()=>{
     if(!window.SessionEditor.isOpen())return;
     $('record-error').textContent='';
-    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){$('record-error').textContent='برای دسترسی به میکروفن، برنامه را با نشانی HTTPS یا localhost باز کنید. بارگذاری فایل همچنان در دسترس است.';return;}
+    if(!navigator.mediaDevices?.getUserMedia){$('record-error').textContent=location.protocol==='http:'?`مرورگر دسترسی میکروفن را برای این نشانی HTTP فعال نکرده است. در Chrome صفحهٔ chrome://flags/#unsafely-treat-insecure-origin-as-secure را باز کنید، نشانی ${location.origin} را اضافه کنید، گزینه را Enabled کنید و مرورگر را دوباره راه‌اندازی کنید. سپس اجازهٔ میکروفن بدهید.`:'این مرورگر دسترسی به میکروفن را پشتیبانی نمی‌کند. از مرورگر دیگری استفاده کنید یا فایل صوتی بارگذاری کنید.';return;}
     if(!window.MediaRecorder){$('record-error').textContent='این مرورگر ضبط صدا را پشتیبانی نمی‌کند. فایل صوتی بارگذاری کنید.';return;}
     if(localBlob){toast('ابتدا ضبط قبلی را ذخیره یا حذف کنید.');return;}
     const own=++generation;$('record-start').disabled=true;$('record-start').hidden=true;$('record-stop').hidden=false;window.SessionEditor.setBusy('recording',true);$('record-state').textContent='در انتظار اجازهٔ میکروفن…';

@@ -16,4 +16,4 @@
 <dialog id="close-dialog" aria-labelledby="close-dialog-title"><h2 id="close-dialog-title">جلسه بسته شود؟</h2><p id="close-confirm-summary"></p><p>پس از شروع تبدیل، افزودن یا جابه‌جایی فایل‌ها متوقف می‌شود. می‌توانید پیشرفت را در صفحهٔ متن دنبال کنید.</p><div class="actions"><button class="btn primary" id="confirm-close">شروع تولید متن</button><button class="btn" id="dismiss-close">ادامهٔ ویرایش</button></div></dialog>
 {% endblock %}
 {% block scripts %}<script>window.APP = {page: "session", jobId: {{ job.id|tojson }}, maxMb: {{ max_upload_mb }}};</script>{% endblock %}
-{% block page_scripts %}<script src="/static/sessions.js?v=3" defer></script><script src="/static/recorder.js?v=3" defer></script>{% endblock %}
+{% block page_scripts %}<script src="/static/sessions.js?v=3" defer></script><script src="/static/recorder.js?v=4" defer></script>{% endblock %}
