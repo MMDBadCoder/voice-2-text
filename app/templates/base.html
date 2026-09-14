@@ -3,18 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ request.state.login_session.csrf_token if request.state.login_session else '' }}">
   <meta name="theme-color" content="#fafbf9">
   <title>{% block page_title %}{{ title }}{% endblock %}</title>
   <link rel="preload" href="/static/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/app.css?v=2">
+  <link rel="stylesheet" href="/static/app.css?v=3">
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 </head>
 <body>
   <a href="#main" class="skip-link">رفتن به محتوای اصلی</a>
   <header class="site-header"><div class="wrap header-inner">
     <a class="brand" href="/" aria-label="{{ title }}"><img src="/static/mark.svg" width="38" height="38" alt=""><span>واژه<span class="brand-caption">دستیار صوتی جلسات</span></span></a>
-    <nav aria-label="ناوبری اصلی"><a href="/" class="nav-link">کتابخانهٔ من</a></nav>
-    <span class="privacy"><span class="privacy-dot"></span>صدای شما، پیش خودتان</span>
+    {% if request.state.user %}
+    <nav aria-label="ناوبری اصلی"><a href="/" class="nav-link">جلسه‌های من</a>{% if request.state.user.is_admin %}<a href="/admin" class="nav-link">مدیریت کاربران</a>{% endif %}</nav>
+    <details class="user-menu"><summary>{{ request.state.user.full_name }} <span aria-hidden="true">⌄</span></summary><div class="download-options"><a href="/account">حساب و رمز عبور</a><button id="logout-btn" type="button">خروج از حساب</button></div></details>
+    {% else %}<span class="muted small">هر گفت‌وگو، یک جای امن.</span>{% endif %}
+    <span class="privacy auth-privacy"><span class="privacy-dot"></span>صدای شما، پیش خودتان</span>
   </div></header>
   {% if stub_mode %}
   <div class="stub-banner wrap" role="alert"><strong>حالت آزمایشی — متن‌ها ساختگی هستند.</strong> برای تبدیل واقعی، <code>ASR_BACKEND=faster_whisper</code> را تنظیم کنید.</div>
@@ -22,8 +26,10 @@
   <main class="wrap" id="main">{% block content %}{% endblock %}</main>
   <footer class="site-footer wrap"><span>از گفت‌وگو، به واژه.</span><span>پردازش محلی · بدون ارسال به سرویس‌های دیگر</span></footer>
   <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">حذف این ضبط؟</h2><p>فایل صوتی و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p><div class="actions"><button class="btn danger-fill" value="delete">حذف ضبط</button><button class="btn" value="cancel" autofocus>انصراف</button></div></form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">حذف این ضبط؟</h2><p>جلسه، همهٔ فایل‌های صوتی و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p><div class="actions"><button class="btn danger-fill" value="delete">حذف ضبط</button><button class="btn" value="cancel" autofocus>انصراف</button></div></form></dialog>
   {% block scripts %}{% endblock %}
-  <script src="/static/app.js?v=2" defer></script>
+  <script src="/static/common.js?v=3" defer></script>
+  <script src="/static/app.js?v=3" defer></script>
+  {% block page_scripts %}{% endblock %}
 </body>
 </html>

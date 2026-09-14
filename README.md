@@ -2,8 +2,8 @@
 
 **Offline Persian meeting transcription, on your CPU.**
 
-Upload a recording, give it an optional title, and turn it into readable Persian
-text. A responsive RTL interface keeps your recordings organized, with search,
+Create a private session, upload or record ordered audio clips, and close it to
+generate readable Persian text. A responsive RTL interface keeps your recordings organized, with search,
 progress, audio playback, timestamps, and downloadable transcripts.
 
 ![Persian recording library with sample recordings](docs/images/library.png)
@@ -45,15 +45,19 @@ sudo chown 10001:10001 data
 ASR_BACKEND=stub docker compose up -d --build --scale worker=1
 ```
 
-Open **http://127.0.0.1:8000**. Upload a short audio file to try the complete flow.
+Before starting, set the initial administrator credentials in `.env` using
+[Accounts setup](docs/ACCOUNTS_SETUP.md). Open **http://127.0.0.1:8000**, sign in,
+create a session, add audio, and close it to generate text.
 
 For actual Persian transcription, follow [Setup](docs/SETUP.md) to obtain a model,
 then start Compose without the `ASR_BACKEND=stub` override. The default
 configuration selects the accurate model provided by the download script.
 
-The application has **no built-in authentication or per-user isolation**. Keep it
-on localhost or a trusted private network; use an authenticated HTTPS reverse
-proxy when exposing it to others. All connected users share one library.
+Accounts have private workspaces, Bale verification, password or code login,
+password recovery, and administrator approval. Enable the Compose `accounts`
+profile for Bale signup. Use HTTPS for remote access and browser recording. See
+[account deployment](docs/ACCOUNTS_SETUP.md) and the
+[feature design](docs/ACCOUNTS_AND_SESSIONS.md).
 
 ## Requirements
 
@@ -83,6 +87,7 @@ Tests use temporary storage and a stub ASR backend. See
 ## License and credits
 
 Application code: [MIT](LICENSE). Fonts: [SIL Open Font License](app/static/fonts/OFL.txt).
+Browser MP3 encoder: [lamejs (LGPL)](app/static/vendor/lamejs/NOTICE.md).
 Model weights are downloaded separately and remain subject to their own licenses.
 
 Built with [FastAPI](https://fastapi.tiangolo.com/),

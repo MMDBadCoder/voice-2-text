@@ -57,5 +57,12 @@ services:
           cpus: "${WORKER_CPU_LIMIT:-4.0}"
           memory: "${WORKER_MEM_LIMIT:-6g}"
 
+  bale:
+    <<: *common
+    command: ["python", "-m", "app.bale"]
+    profiles: [accounts]
+    healthcheck:
+      disable: true
+
 volumes:
   redis-data:

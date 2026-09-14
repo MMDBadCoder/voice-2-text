@@ -23,6 +23,11 @@ for i in $(seq 1 "$WORKER_COUNT"); do
   echo "  worker $i -> pid ${pids[-1]}"
 done
 
+if [[ -n "${BALE_BOT_TOKEN:-}" ]]; then
+  "$PY" -m app.bale & pids+=($!)
+  echo "  Bale verification service -> pid ${pids[-1]}"
+fi
+
 echo "starting api on http://127.0.0.1:$PORT"
 "$PY" -m uvicorn app.main:app --host "${HOST:-0.0.0.0}" --port "$PORT" & pids+=($!)
 wait

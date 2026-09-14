@@ -8,7 +8,7 @@ import traceback
 from pathlib import Path
 
 from . import asr, config, db, diarize, media, queue as qmod, results
-from .db import Job, JobStatus, SessionLocal, utcnow
+from .db import AudioClip, Job, JobStatus, SessionLocal, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ def _purge_audio(job_id: str) -> int:
 def _cleanup_canceled(job_id: str, audio_path: str, fully_stopped: bool = True) -> None:
     """Drop partial output and stop charging the queue for a job nobody wants."""
     results.delete(job_id)
+    (config.AUDIO_DIR / f"{job_id}.assembling.mp3").unlink(missing_ok=True)
     if fully_stopped:
         qmod.clear_cancel(job_id)
     with SessionLocal() as session:
@@ -78,11 +79,20 @@ def run_transcription(job_id: str) -> dict:
         audio_path = str(config.AUDIO_DIR / job.stored_name)
         tier = job.tier or config.DEFAULT_TIER
         original_name = job.original_name
+        is_session = bool(job.is_session)
 
     _update(job_id, status=JobStatus.RUNNING, started_at=utcnow(), progress=0.0,
             stage="probing", error=None)
 
     try:
+        if is_session:
+            _update(job_id, stage="assembling")
+            with SessionLocal() as session:
+                clips = session.query(AudioClip).filter_by(job_id=job_id).order_by(AudioClip.position).all()
+                paths = [str(config.AUDIO_DIR / c.stored_name) for c in clips]
+            if not paths:
+                raise ValueError("Session has no audio clips")
+            media.concatenate_audio(paths, audio_path)
         if not Path(audio_path).exists():
             raise FileNotFoundError(f"audio file missing: {audio_path}")
 
@@ -149,6 +159,9 @@ def run_transcription(job_id: str) -> dict:
         audio_deleted = 0
         if config.DELETE_AUDIO_AFTER_TRANSCRIBE:
             Path(audio_path).unlink(missing_ok=True)
+            if is_session:
+                for path in paths:
+                    Path(path).unlink(missing_ok=True)
             audio_deleted = 1
 
         _update(
@@ -198,6 +211,9 @@ def sweep_retention() -> dict:
     with SessionLocal() as session:
         stale = session.query(Job).filter(Job.created_at < cutoff).all()
         for job in stale:
+            for clip in session.query(AudioClip).filter_by(job_id=job.id).all():
+                (config.AUDIO_DIR / clip.stored_name).unlink(missing_ok=True)
+                session.delete(clip)
             (config.AUDIO_DIR / job.stored_name).unlink(missing_ok=True)
             results.delete(job.id)
             session.delete(job)

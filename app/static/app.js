@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const fa = value => String(value).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const labels = {queued:'در صف',running:'در حال تبدیل',done:'آماده',failed:'ناموفق',canceled:'متوقف شده',canceling:'در حال توقف'};
+  const labels = {open:'باز',queued:'در صف',running:'در حال تبدیل',done:'آماده',failed:'ناموفق',canceled:'متوقف شده',canceling:'در حال توقف'};
   const state = j => j.stage === 'canceling' ? 'canceling' : j.status;
   const busy = j => ['queued','running','canceling'].includes(state(j));
   const percent = j => Math.min(j.status === 'done' ? 100 : 99, Math.max(0, Math.floor((j.progress || 0) * 100)));
@@ -19,7 +19,7 @@
     return new Intl.DateTimeFormat('fa-IR', {month:'short',day:'numeric',year:'numeric'}).format(new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + 'Z'));
   }
   async function api(url, options) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {...options, headers: {...options?.headers, "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || ""}});
     if (!response.ok) {
       let message = 'ارتباط برقرار نشد. دوباره تلاش کنید.';
       try { const body = await response.json(); if (typeof body.detail === 'string') message = body.detail; } catch {}
@@ -148,7 +148,7 @@
         $('cancel-btn').hidden = !['queued','running'].includes(st);
         $('retry-btn').hidden = !['failed','canceled'].includes(st);
         $('processing-panel').hidden = !busy(j);
-        const stage = {probing:'در حال آماده‌سازی صدا',transcribing:'صدای شما به واژه تبدیل می‌شود',diarizing:'در حال تشخیص گویندگان'};
+        const stage = {assembling:'در حال آماده‌سازی فایل‌های جلسه',probing:'در حال آماده‌سازی صدا',transcribing:'صدای شما به واژه تبدیل می‌شود',diarizing:'در حال تشخیص گویندگان'};
         $('job-stage').textContent = st === 'canceling' ? 'در حال توقف پردازش…' : st === 'queued' ? 'نوبت ضبط شما می‌رسد' : stage[j.stage] || 'در حال تبدیل به متن';
         $('progress-hint').textContent = st === 'canceling' ? 'پس از توقف کامل، امکان شروع دوباره دارید.' : st === 'queued' ? (j.queue_position ? `نوبت ${fa(j.queue_position)} در صف · می‌توانید به کارهای دیگرتان برسید.` : 'پس از پایان ضبط‌های قبلی، تبدیل شروع می‌شود.') : 'می‌توانید صفحه را ببندید؛ متن در کتابخانه ذخیره می‌شود.';
         $('job-percent').textContent = st === 'running' && pct > 0 ? `${fa(pct)}٪` : '';

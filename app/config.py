@@ -182,3 +182,15 @@ def apply_thread_env() -> None:
 def ensure_dirs() -> None:
     for d in (DATA_DIR, AUDIO_DIR, RESULTS_DIR):
         d.mkdir(parents=True, exist_ok=True)
+
+# Accounts and Bale verification. Real credentials belong only in private .env.
+BALE_BOT_TOKEN = _str("BALE_BOT_TOKEN", "")
+BALE_BOT_USERNAME = _str("BALE_BOT_USERNAME", "")
+BOOTSTRAP_ADMIN_PHONE = _str("BOOTSTRAP_ADMIN_PHONE", "")
+BOOTSTRAP_ADMIN_PASSWORD = _str("BOOTSTRAP_ADMIN_PASSWORD", "")
+PUBLIC_BASE_URL = _str("PUBLIC_BASE_URL", "").rstrip("/")
+AUTH_COOKIE_SECURE = _bool("AUTH_COOKIE_SECURE", PUBLIC_BASE_URL.startswith("https://"))
+AUTH_SESSION_DAYS = _int("AUTH_SESSION_DAYS", 7)
+OTP_TTL_SECONDS = _int("OTP_TTL_SECONDS", 300)
+MAX_SESSION_FILES = _int("MAX_SESSION_FILES", 50)
+MAX_SESSION_MB = _int("MAX_SESSION_MB", 2000)

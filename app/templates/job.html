@@ -2,6 +2,7 @@
 {% block page_title %}{{ job.display_title }} — {{ title }}{% endblock %}
 {% block content %}
 <nav class="crumbs"><a href="/">→ بازگشت به ضبط‌ها</a></nav>
+{% if job.is_session %}<a class="btn small" href="/sessions/{{ job.id }}">فایل‌ها و ترتیب جلسه</a>{% endif %}
 <section id="job-card" class="detail-header">
   <div class="card-head"><div><p class="eyebrow">از صدا به متن</p><h1 id="job-title">{{ job.display_title }}</h1></div><span class="status" id="job-status">در حال دریافت وضعیت…</span></div>
   <div class="detail-sub"><div id="job-meta" class="meta"></div><div class="actions"><button id="cancel-btn" class="btn small" hidden>توقف تبدیل</button><button id="retry-btn" class="btn small" hidden>تلاش دوباره</button><button id="delete-btn" class="icon-button danger" aria-label="حذف ضبط"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button></div></div>

@@ -44,3 +44,42 @@ def has_audio_stream(path: str | Path) -> bool:
     except Exception:
         # Can't prove it either way without a decoder; let the ASR stage decide.
         return True
+
+
+def concatenate_audio(paths: list[str], destination: str) -> float:
+    """Stream ordered, mixed-format clips into one mono MP3 without buffering all audio."""
+    import av
+    from fractions import Fraction
+
+    target = Path(destination)
+    temporary = target.with_suffix('.assembling.mp3')
+    samples_written = 0
+    try:
+        with av.open(str(temporary), 'w', format='mp3') as output:
+            stream = output.add_stream('libmp3lame', rate=16000)
+            stream.layout = 'mono'
+            stream.bit_rate = 64000
+            for path in paths:
+                resampler = av.AudioResampler(format='fltp', layout='mono', rate=16000)
+                def encode(frame):
+                    nonlocal samples_written
+                    frame.pts = samples_written
+                    frame.time_base = Fraction(1,16000)
+                    samples_written += frame.samples
+                    for packet in stream.encode(frame):
+                        output.mux(packet)
+                with av.open(path) as source:
+                    for frame in source.decode(audio=0):
+                        for converted in resampler.resample(frame):
+                            encode(converted)
+                for converted in resampler.resample(None):
+                    encode(converted)
+            for packet in stream.encode(None):
+                output.mux(packet)
+        if not samples_written:
+            raise ValueError('No audio samples in session')
+        temporary.replace(target)
+        return samples_written / 16000
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise

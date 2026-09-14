@@ -1,37 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">فضایی برای شنیدن و نوشتن</p><h1>گفت‌وگوها می‌مانند.</h1><p class="muted">صدای جلسه، مصاحبه یا ایده‌هایتان را به متن فارسی تبدیل کنید.</p></div><div class="sound-art" aria-hidden="true">{% for h in [12,24,40,22,54,76,42,64,94,58,34,70,46,26,40,16,8] %}<i style="--h:{{ h }}px;--i:{{ loop.index }}"></i>{% endfor %}</div></div>
-<div class="workspace">
-<section class="upload-panel" aria-labelledby="upload-title">
-  <div class="section-heading"><span class="step-number">۰۱</span><h2 id="upload-title">یک صدای تازه</h2></div>
-  <form id="upload-form" enctype="multipart/form-data" data-max-mb="{{ max_upload_mb }}">
-    <label class="dropzone" id="dropzone" for="file-input">
-      <input type="file" id="file-input" name="file" accept=".{{ allowed|join(',.') }}" class="file-input">
-      <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg></span>
-      <strong id="dz-title">فایل صوتی را اینجا رها کنید</strong><span class="dz-pick">یا از دستگاه انتخاب کنید</span>
-      <span class="dz-hint">MP3، WAV، M4A و دیگر قالب‌های صوتی<br>حداکثر {{ max_upload_mb }} مگابایت</span>
-      <span class="dz-file" id="dz-file" hidden></span>
-    </label>
-    <label class="field-label" for="recording-title">عنوان ضبط <span>اختیاری</span></label>
-    <input class="text-input" id="recording-title" name="title" maxlength="200" placeholder="مثلاً جلسهٔ برنامه‌ریزی هفته" autocomplete="off">
-    <p class="field-hint">بدون عنوان، نام فایل نمایش داده می‌شود.</p>
-    {% if tiers|length > 1 %}
-    <fieldset class="tiers"><legend>روش تبدیل</legend><div class="tier-options">{% for t in tiers %}<label class="tier"><input type="radio" name="tier" value="{{ t.value }}" {% if t.value == default_tier %}checked{% endif %}><span><strong>{{ t.label }}</strong><small>{{ t.hint }}</small></span></label>{% endfor %}</div></fieldset>
-    {% else %}<input type="hidden" name="tier" value="{{ default_tier }}">{% endif %}
-    <button type="submit" id="submit-btn" class="btn primary upload-submit" disabled>تبدیل به متن <span aria-hidden="true">←</span></button>
-    <div class="progress" id="upload-progress" role="progressbar" aria-label="بارگذاری فایل" aria-valuemin="0" aria-valuemax="100" hidden><div class="bar" id="upload-bar"></div></div>
-    <p id="upload-status" class="upload-status" role="status"></p>
-  </form>
-  <p class="panel-footnote">می‌توانید این صفحه را ببندید؛ تبدیل ادامه پیدا می‌کند.</p>
-</section>
-<section class="library" aria-labelledby="library-title">
-  <div class="section-heading library-heading"><div><p class="eyebrow">کتابخانهٔ شخصی</p><h2 id="library-title">ضبط‌های شما <span id="queue-summary" class="count"></span></h2></div><button class="icon-button" id="refresh-btn" aria-label="به‌روزرسانی فهرست"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg></button></div>
-  <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="search" type="search" placeholder="جست‌وجو در عنوان ضبط‌ها…" aria-label="جست‌وجو در ضبط‌ها"></label>
-  <div class="filter-tabs" role="group" aria-label="فیلتر وضعیت"><button data-filter="" aria-pressed="true">همه</button><button data-filter="done" aria-pressed="false">آماده</button><button data-filter="running" aria-pressed="false">در حال تبدیل</button><button data-filter="queued" aria-pressed="false">در صف</button></div>
-  <p id="list-error" class="inline-error" role="status" hidden></p>
-  <div id="jobs" aria-busy="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
-  <button id="more-btn" class="btn load-more" hidden>نمایش بیشتر</button>
-</section>
-</div>
+<div class="page-heading workspace-heading"><div><p class="eyebrow">فضای شخصی {{ request.state.user.full_name }}</p><h1>گفت‌وگوها، کنار هم.</h1><p class="muted">یک جلسه باز کنید، صداها را جمع کنید و وقتی آماده بودید، متن بگیرید.</p></div><button class="btn primary" id="new-session-btn">＋ جلسهٔ جدید</button></div>
+<section class="session-library"><div class="library-toolbar"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="session-search" type="search" placeholder="جست‌وجو در جلسه‌های من…" aria-label="جست‌وجو در جلسه‌ها"></label><span class="muted small" id="session-count"></span></div><div class="filter-tabs" role="group" aria-label="فیلتر جلسه‌ها"><button data-session-filter="" aria-pressed="true">همهٔ جلسه‌ها</button><button data-session-filter="open" aria-pressed="false">باز و قابل ویرایش</button><button data-session-filter="running" aria-pressed="false">در حال تبدیل</button><button data-session-filter="done" aria-pressed="false">آماده</button></div><div class="session-grid" id="session-list"><div class="skeleton"></div><div class="skeleton"></div></div><p class="inline-error" id="library-error" role="status"></p><div class="pagination"><button class="btn small" id="sessions-prev" hidden>صفحهٔ قبل</button><button class="btn small" id="sessions-next" hidden>صفحهٔ بعد</button></div></section>
+<dialog id="new-session-dialog" aria-labelledby="new-session-title"><form id="new-session-form"><p class="eyebrow">یک جای تازه برای صداها</p><h2 id="new-session-title">جلسهٔ جدید</h2><label class="field-label" for="session-title">عنوان جلسه</label><input class="text-input" id="session-title" name="title" placeholder="مثلاً جلسهٔ برنامه‌ریزی هفته" maxlength="200" required autofocus><fieldset class="tiers"><legend>روش تبدیل پس از بستن جلسه</legend><div class="tier-options">{% for t in tiers %}<label class="tier"><input type="radio" name="tier" value="{{ t.value }}" {% if t.value == default_tier %}checked{% endif %}><span><strong>{{ t.label }}</strong><small>{{ t.hint }}</small></span></label>{% endfor %}</div></fieldset><p class="field-hint">تا زمانی که جلسه را نبندید، تبدیل شروع نمی‌شود.</p><div class="actions"><button class="btn primary" id="create-session-submit">ساخت جلسه</button><button class="btn" type="button" id="dismiss-new-session">انصراف</button></div><p id="create-error" class="inline-error" role="alert"></p></form></dialog>
 {% endblock %}
-{% block scripts %}<script>window.APP = {page: "index"};</script>{% endblock %}
+{% block scripts %}<script>window.APP = {page: "workspace"};</script>{% endblock %}
+{% block page_scripts %}<script src="/static/sessions.js?v=3" defer></script>{% endblock %}

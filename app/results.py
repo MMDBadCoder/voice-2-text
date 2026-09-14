@@ -55,4 +55,5 @@ def load_meta(job_id: str) -> dict:
 
 
 def delete(job_id: str) -> None:
-    result_path(job_id).unlink(missing_ok=True)
+    for suffix in (".json", ".json.tmp", ".docx"):
+        result_path(job_id).with_suffix(suffix).unlink(missing_ok=True)

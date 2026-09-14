@@ -260,9 +260,8 @@ a missing title falls back to the original filename in the UI.
 
 ## 7. Operational boundaries
 
-The application has one shared library with no built-in authentication or
-per-user authorization. Use a private network or an authenticated reverse proxy
-when giving access to other people. Online preparation downloads dependencies
+The application uses approved accounts and owner-scoped sessions. Administrators
+manage access but cannot read other users’ audio. Use HTTPS for remote access. Online preparation downloads dependencies
 and weights; transcription uses the installed local files.
 
 The supervisor handles normal cancellation and task failures, but there is no
@@ -270,5 +269,33 @@ complete recovery mechanism for host crashes or a supervisor killed unexpectedly
 `/healthz` checks API liveness; `/api/health` reports queue, worker and resource
 information without proving that a particular model can transcribe successfully.
 Keep backups and validate models on the target machine. See the
-[known limits](ARCHITECTURE.md#known-limits-in-010) and
+[known limits](ARCHITECTURE.md#known-limits) and
 [deployment guide](DEPLOYMENT.md) for retention and recovery considerations.
+
+## 8. Accounts and multi-clip sessions
+
+```mermaid
+flowchart LR
+    Browser --> Auth[Cookie authentication and CSRF]
+    Auth --> Approval[Admin approval and ownership checks]
+    Approval --> Session[Open session]
+    Session --> Clips[Ordered uploads and browser MP3 recordings]
+    Clips --> Close[Close and lock session]
+    Close --> Queue[Redis queue]
+    Queue --> Child[Isolated assembly and ASR process]
+    Child --> Result[Combined audio and transcript]
+    Browser --> Challenge[Phone and purpose-bound challenge]
+    Challenge --> Bale[Bale bot contact verification and code]
+    Bale --> Account[Signup or login or password reset]
+    Account --> Auth
+```
+
+SQLite now also holds users, hashed login tokens, verification challenges, Bale
+identities, rate limits, approval audit records and ordered audio clips. Existing
+unowned jobs are assigned to the bootstrap administrator during migration.
+Open sessions do not consume worker resources. Closing streams their clips into
+one MP3 before the existing transcription pipeline. Cancellation covers assembly
+and inference in the same owned process group.
+
+See [design and lifecycle diagrams](ACCOUNTS_AND_SESSIONS.md) and
+[configuration and deployment](ACCOUNTS_SETUP.md).

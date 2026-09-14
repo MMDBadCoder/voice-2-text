@@ -16,7 +16,8 @@ flowchart LR
     Child --> Files
 ```
 
-An upload is validated, stored locally and added to the queue. A supervisor
+An open session stores ordered clips without queuing. Closing it locks editing
+and queues assembly and transcription. The legacy single-upload API queues immediately. A supervisor
 atomically claims the job and starts a fresh Python interpreter in its own POSIX
 process group. The child probes audio, loads a local model, transcribes and
 normalizes Persian text, optionally assigns speaker labels, and writes an atomic
@@ -41,7 +42,9 @@ stale metadata. Backups and process supervision remain operator responsibilities
 ## HTTP API
 
 Interactive API documentation: `/docs`. OpenAPI schema: `/openapi.json`.
-There is no authentication; every connected user has access to the same library.
+Workspace APIs require a session cookie and approved account; mutations also
+require `X-CSRF-Token`. Every recording lookup enforces ownership, including for
+administrators. See [account API usage](ACCOUNTS_SETUP.md#api-clients).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -57,10 +60,10 @@ There is no authentication; every connected user has access to the same library.
 | `GET` | `/api/health` | Operational queue, model, CPU, job and disk information. |
 | `GET` | `/healthz` | API liveness; does not prove workers or models are ready. |
 
-Example:
+Example (after login, with saved cookie and CSRF token):
 
 ```bash
-curl -F 'file=@meeting.mp3' \
+curl -b cookies.txt -H "X-CSRF-Token: $CSRF_TOKEN" -F 'file=@meeting.mp3' \
      -F 'title=جلسهٔ هفتگی' \
      -F 'tier=accurate' \
      http://127.0.0.1:8000/api/jobs
@@ -70,15 +73,32 @@ A blank title falls back to the original filename. Titles are stored, searchable
 and used for export filenames. Startup adds the nullable title column to older
 databases without replacing existing recordings.
 
-## Known limits in 0.1.0
+## Account and session endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/auth/challenges` | Request a purpose-bound Bale verification challenge. |
+| POST | `/api/auth/signup` | Verify code and create pending account. |
+| POST | `/api/auth/login/password`, `/api/auth/login/bale` | Start an authenticated session. |
+| POST | `/api/auth/password/reset`, `/api/auth/password/change` | Recover or change password and revoke previous logins. |
+| GET | `/api/auth/me` | Current account and CSRF token. |
+| POST | `/api/auth/logout` | Revoke current login. |
+| GET | `/api/admin/users` | Administrator account search and pagination. |
+| POST | `/api/admin/users/{id}/status` | Approve, suspend or return account to pending. |
+| POST | `/api/sessions` | Create an open titled session. |
+| GET, POST | `/api/sessions/{id}/clips` | List or upload clips. |
+| GET | `/api/sessions/{id}/clips/{clip_id}/audio` | Private clip playback. |
+| DELETE | `/api/sessions/{id}/clips/{clip_id}` | Remove an open session's clip. |
+| POST | `/api/sessions/{id}/order` | Set the complete ordered clip ID list. |
+| POST | `/api/sessions/{id}/close` | Lock editing and queue processing. |
+| POST | `/api/sessions/{id}/reopen` | Edit a failed or fully stopped session. |
+
+## Known limits
 
 - Linux/POSIX process management; native Windows is unsupported.
-- One shared library, no accounts or per-recording permissions.
-- No streaming transcript or live microphone recording; upload completed files.
+- No streaming transcript; transcription starts when a session closes.
+- Browser microphone access requires HTTPS or localhost; each capture is limited to ten minutes.
 - Progress advances at decoder segment boundaries; it is not an ETA.
 - No built-in supervisor-crash recovery or transactional database/queue enqueue.
-- Browser library displays up to 200 matching records; API supports pagination.
-- Generated Word files may remain cached in the results directory after deletion;
-  operators should include the results directory in storage management.
-- Optional diarization is not covered by the automated model-free tests.
-- SQLite on a single host is the supported documented storage arrangement.
+- Optional diarization is not covered by automated model-free tests.
+- SQLite on a single host is the supported storage arrangement.

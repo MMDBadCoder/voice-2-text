@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -12,13 +13,13 @@ from sqlalchemy import case
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
-    FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response,
+    FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, RedirectResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import __version__, config, db, exporters, queue as qmod, results, storage
-from .db import Job, JobStatus, SessionLocal
+from . import __version__, accounts, auth, config, db, exporters, queue as qmod, results, sessions, storage
+from .db import AudioClip, Job, JobStatus, SessionLocal
 
 log = logging.getLogger(__name__)
 BASE = Path(__file__).resolve().parent
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     for warning in config.validate(role="api"):
         log.warning("%s", warning)
     db.init_db()
+    auth.bootstrap_admin()
     requested, cores = config.cpu_budget()
     log.info(
         "api ready: %d worker(s) x %d thread(s) = %d of %d cores; backend=%s",
@@ -42,6 +44,42 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=config.APP_TITLE, version=__version__, lifespan=lifespan)
+app.include_router(accounts.router)
+app.include_router(sessions.router)
+
+
+@app.middleware("http")
+async def account_boundary(request: Request, call_next):
+    from starlette.concurrency import run_in_threadpool
+    path = request.url.path
+    user, login = await run_in_threadpool(auth.lookup_session, request.cookies.get(auth.COOKIE))
+    request.state.user, request.state.login_session = user, login
+    unsafe = request.method not in ("GET", "HEAD", "OPTIONS")
+    if unsafe:
+        origin = request.headers.get("origin")
+        expected = config.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+        if origin and origin.rstrip("/") != expected:
+            return JSONResponse({"detail": "مبدأ درخواست معتبر نیست"}, status_code=403)
+        if user and not hmac.compare_digest(request.headers.get("x-csrf-token", ""), login["csrf_token"]):
+            return JSONResponse({"detail": "نشست را تازه کنید و دوباره تلاش کنید"}, status_code=403)
+    workspace = path == "/" or path.startswith(("/api/jobs", "/api/sessions", "/jobs/", "/sessions/"))
+    administrator = path == "/admin" or path.startswith("/api/admin") or path == "/api/health"
+    account = path in ("/account", "/pending")
+    if workspace or administrator or account:
+        if not user:
+            return JSONResponse({"detail": "ابتدا وارد شوید"}, status_code=401) if path.startswith("/api/") else RedirectResponse("/login", status_code=303)
+        if (workspace or administrator) and user["status"] != "approved":
+            return JSONResponse({"detail": "حساب شما اجازهٔ استفاده ندارد"}, status_code=403) if path.startswith("/api/") else RedirectResponse("/pending", status_code=303)
+        if administrator and not user["is_admin"]:
+            return JSONResponse({"detail": "دسترسی مدیر لازم است"}, status_code=403)
+    response = await call_next(request)
+    if not path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    return response
+
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 
@@ -91,7 +129,7 @@ async def index(request: Request):
 @app.get("/jobs/{job_id}", response_class=HTMLResponse)
 async def job_page(request: Request, job_id: str):
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         data = job.to_dict()
@@ -104,7 +142,7 @@ async def job_page(request: Request, job_id: str):
 
 # ------------------------------------------------------------------- api ---
 @app.post("/api/jobs")
-async def create_job(file: UploadFile, tier: str = Form(default=""), title: str = Form(default="")):
+async def create_job(request: Request, file: UploadFile, tier: str = Form(default=""), title: str = Form(default="")):
     title = title.strip()
     if len(title) > 200:
         raise HTTPException(400, "عنوان باید حداکثر ۲۰۰ نویسه باشد")
@@ -121,6 +159,7 @@ async def create_job(file: UploadFile, tier: str = Form(default=""), title: str 
     with SessionLocal() as session:
         job = Job(
             id=job_id,
+            owner_id=auth.require_user(request)["id"],
             title=title or None,
             original_name=storage.sanitize_name(file.filename),
             stored_name=stored_name,
@@ -137,14 +176,14 @@ async def create_job(file: UploadFile, tier: str = Form(default=""), title: str 
     except Exception as exc:
         # Redis down: the row would otherwise sit "queued" forever with no worker.
         with SessionLocal() as session:
-            job = session.get(Job, job_id)
+            job = auth.owned_job(session, request, job_id)
             job.status = JobStatus.FAILED
             job.error = f"صف در دسترس نیست / queue unavailable: {exc}"
             session.commit()
         raise HTTPException(503, "صف پردازش در دسترس نیست. Redis را بررسی کنید.") from exc
 
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         job.rq_job_id = rq_id
         session.commit()
         payload = job.to_dict()
@@ -152,12 +191,12 @@ async def create_job(file: UploadFile, tier: str = Form(default=""), title: str 
 
 
 @app.get("/api/jobs")
-async def list_jobs(limit: int = 50, offset: int = 0, status: str | None = None, search: str = ""):
+async def list_jobs(request: Request, limit: int = 50, offset: int = 0, status: str | None = None, search: str = ""):
     if status and status not in {s.value for s in JobStatus}:
         raise HTTPException(400, "وضعیت نامعتبر است")
     limit = max(1, min(limit, 200))
     with SessionLocal() as session:
-        q = session.query(Job)
+        q = session.query(Job).filter(Job.owner_id == auth.require_user(request)["id"])
         if search.strip():
             term = search.strip()
             q = q.filter(db.or_(Job.title.contains(term, autoescape=True), Job.original_name.contains(term, autoescape=True)))
@@ -166,6 +205,10 @@ async def list_jobs(limit: int = 50, offset: int = 0, status: str | None = None,
         total = q.count()
         rows = q.order_by(Job.created_at.desc()).offset(offset).limit(limit).all()
         items = [r.to_dict() for r in rows]
+        counts = dict(session.query(AudioClip.job_id, db.func.count(AudioClip.id)).filter(
+            AudioClip.job_id.in_([r.id for r in rows])).group_by(AudioClip.job_id).all()) if rows else {}
+        for item in items:
+            item["clip_count"] = counts.get(item["id"], 0 if item["is_session"] else 1)
     for item in items:
         if item["status"] == "queued":
             item["queue_position"] = None
@@ -173,9 +216,9 @@ async def list_jobs(limit: int = 50, offset: int = 0, status: str | None = None,
 
 
 @app.get("/api/jobs/{job_id}")
-async def get_job(job_id: str):
+async def get_job(job_id: str, request: Request):
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         data = job.to_dict()
@@ -186,7 +229,9 @@ async def get_job(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/segments")
-async def get_segments(job_id: str):
+async def get_segments(job_id: str, request: Request):
+    with SessionLocal() as session:
+        auth.owned_job(session, request, job_id)
     result = results.load(job_id)
     if result is None:
         raise HTTPException(404, "نتیجه‌ای موجود نیست")
@@ -201,10 +246,10 @@ async def get_segments(job_id: str):
 
 
 @app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
+async def cancel_job(job_id: str, request: Request):
     """Stop a job but keep the row, so the user can see it was canceled."""
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         if job.status in (JobStatus.DONE, JobStatus.FAILED, JobStatus.CANCELED):
@@ -238,15 +283,18 @@ async def cancel_job(job_id: str):
 
 
 @app.delete("/api/jobs/{job_id}")
-async def delete_job(job_id: str):
+async def delete_job(job_id: str, request: Request):
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         stored_name = job.stored_name
         rq_job_id = job.rq_job_id
         was_running = job.status == JobStatus.RUNNING
         qmod.request_cancel(job_id)
+        for clip in session.query(AudioClip).filter_by(job_id=job_id).all():
+            storage.audio_path(clip.stored_name).unlink(missing_ok=True)
+            session.delete(clip)
         session.delete(job)
         session.commit()
 
@@ -266,12 +314,12 @@ async def delete_job(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/download")
-async def download(job_id: str, format: str = "txt", timestamps: bool = True):
+async def download(job_id: str, request: Request, format: str = "txt", timestamps: bool = True):
     if format not in exporters.FORMATS:
         raise HTTPException(400, f"قالب نامعتبر. مجاز: {', '.join(exporters.FORMATS)}")
 
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         if job.status != JobStatus.DONE:
@@ -308,9 +356,9 @@ async def download(job_id: str, format: str = "txt", timestamps: bool = True):
 
 
 @app.get("/api/jobs/{job_id}/audio")
-async def get_audio(job_id: str):
+async def get_audio(job_id: str, request: Request):
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         path = storage.audio_path(job.stored_name)
@@ -320,16 +368,21 @@ async def get_audio(job_id: str):
 
 
 @app.post("/api/jobs/{job_id}/retry")
-async def retry(job_id: str):
+async def retry(job_id: str, request: Request):
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
+        db.write_lock(session)
+        job = auth.owned_job(session, request, job_id)
         if job is None:
             raise HTTPException(404, "جلسه یافت نشد")
         if job.stage == "canceling":
             raise HTTPException(409, "لطفاً تا توقف کامل پردازش صبر کنید")
         if job.status not in (JobStatus.FAILED, JobStatus.CANCELED):
             raise HTTPException(409, "فقط کارهای ناموفق یا لغوشده قابل اجرای دوباره‌اند")
-        if not storage.audio_path(job.stored_name).exists():
+        source_exists = storage.audio_path(job.stored_name).exists()
+        if job.is_session:
+            clips = session.query(AudioClip).filter_by(job_id=job_id).all()
+            source_exists = bool(clips) and all(storage.audio_path(c.stored_name).exists() for c in clips)
+        if not source_exists:
             raise HTTPException(409, "فایل صوتی دیگر موجود نیست")
         job.status = JobStatus.QUEUED
         job.progress = 0.0
@@ -339,9 +392,15 @@ async def retry(job_id: str):
         job.finished_at = None
         session.commit()
     qmod.clear_cancel(job_id)  # a stale flag would abort the retry immediately
+    try:
+        rq_id = qmod.enqueue(job_id)
+    except Exception:
+        from .tasks import _update
+        _update(job_id, status=JobStatus.FAILED, stage="failed", error="صف پردازش در دسترس نیست")
+        raise HTTPException(503, "صف در دسترس نیست؛ دوباره تلاش کنید") from None
     with SessionLocal() as session:
-        job = session.get(Job, job_id)
-        job.rq_job_id = qmod.enqueue(job_id)
+        job = auth.owned_job(session, request, job_id)
+        job.rq_job_id = rq_id
         session.commit()
         return job.to_dict()
 
@@ -372,3 +431,40 @@ async def health():
 @app.get("/healthz", response_class=PlainTextResponse)
 async def healthz():
     return "ok"
+
+
+@app.get("/login", response_class=HTMLResponse)
+@app.get("/signup", response_class=HTMLResponse)
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def authentication_page(request: Request):
+    return templates.TemplateResponse(request, "auth.html", {"title": config.APP_TITLE,
+        "mode": {"/login": "login", "/signup": "signup", "/forgot-password": "reset"}[request.url.path]})
+
+
+@app.get("/pending", response_class=HTMLResponse)
+async def pending_page(request: Request):
+    if request.state.user["status"] == "approved":
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "pending.html", {"title": config.APP_TITLE})
+
+
+@app.get("/account", response_class=HTMLResponse)
+async def account_page(request: Request):
+    return templates.TemplateResponse(request, "account.html", {"title": config.APP_TITLE})
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    return templates.TemplateResponse(request, "admin.html", {"title": config.APP_TITLE})
+
+
+@app.get("/sessions/{job_id}", response_class=HTMLResponse)
+async def session_page(job_id: str, request: Request):
+    with SessionLocal() as s:
+        job = auth.owned_job(s, request, job_id)
+        if not job.is_session:
+            return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+        data = job.to_dict()
+    return templates.TemplateResponse(request, "session.html", {"title": config.APP_TITLE,
+        "job": data, "allowed": config.ALLOWED_EXTENSIONS, "max_upload_mb": config.MAX_UPLOAD_MB,
+        "stub_mode": _stub_mode()})

@@ -84,5 +84,13 @@ models/
 ```
 
 Do not expose `data/`, Redis or the health endpoint's operational details to
-untrusted users. Disk quotas, authentication, and backup scheduling are deployment
+untrusted users. Disk quotas and backup scheduling are deployment
 responsibilities, not application features.
+
+## Accounts and sessions
+
+See [Accounts setup](ACCOUNTS_SETUP.md) for `BALE_BOT_TOKEN`,
+`BALE_BOT_USERNAME`, `BOOTSTRAP_ADMIN_PHONE`, `BOOTSTRAP_ADMIN_PASSWORD`,
+`PUBLIC_BASE_URL`, `AUTH_COOKIE_SECURE`, `MAX_SESSION_FILES` and `MAX_SESSION_MB`.
+`AUTH_SESSION_DAYS` defaults to 7; `OTP_TTL_SECONDS` defaults to 300.
+Keep deployment credentials in the ignored `.env` file.

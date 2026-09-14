@@ -128,17 +128,15 @@ Dockerfile requires `bundle/requirements.lock.txt` and `bundle/wheels/`.
 
 ## HTTPS and access control
 
-This release has no accounts, permissions, or user isolation. Anyone with access
-can read, upload, cancel, retry, and delete recordings. Keep Redis private too.
-For access outside a trusted network, place an authenticated HTTPS reverse proxy
-in front of the localhost API. For example, an existing Nginx TLS virtual host
+Accounts require administrator approval and recordings are scoped to their owner.
+Configure the administrator and Bale poller using [Accounts setup](ACCOUNTS_SETUP.md).
+Keep Redis private. For remote access, place an HTTPS reverse proxy in front of
+the localhost API and set `PUBLIC_BASE_URL` and `AUTH_COOKIE_SECURE=true`. For example, an existing Nginx TLS virtual host
 can proxy the app like this:
 
 ```nginx
 # Inside a server block with your own TLS certificate configuration:
 client_max_body_size 500m;
-auth_basic "Recordings";
-auth_basic_user_file /etc/nginx/voice-users;
 location / {
     proxy_pass http://127.0.0.1:8000;
     proxy_set_header Host $host;
@@ -184,3 +182,6 @@ Optional diarization and air-gapped installation on other distributions still
 require validation in your target environment. Dependency floors and model URLs
 can resolve differently over time: archive the generated lock, wheels, images and
 model revisions when you need a reproducible deployment.
+
+Bale verification requires outbound network access even when ASR runs offline.
+Password login and local transcription remain available without Bale connectivity.

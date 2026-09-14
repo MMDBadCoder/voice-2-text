@@ -12,6 +12,7 @@ uvicorn[standard]>=0.34
 jinja2>=3.1.5
 python-multipart>=0.0.20
 pydantic>=2.10
+argon2-cffi>=23.1
 
 # --- queue + store ---
 rq>=2.1

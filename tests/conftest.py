@@ -19,6 +19,12 @@ os.environ.update({
     "DEFAULT_TIER": "fast",
     "DIARIZATION_ENABLED": "false",
     "MAX_UPLOAD_MB": "5",
+    "BALE_BOT_TOKEN": "",
+    "BALE_BOT_USERNAME": "",
+    "BOOTSTRAP_ADMIN_PHONE": "",
+    "BOOTSTRAP_ADMIN_PASSWORD": "",
+    "AUTH_COOKIE_SECURE": "false",
+    "PUBLIC_BASE_URL": "",
 })
 
 import pytest  # noqa: E402
@@ -50,6 +56,20 @@ def client(monkeypatch):
     monkeypatch.setattr(main.qmod, "health", lambda: {"ok": True, "queued": len(enqueued), "workers": 1})
 
     with TestClient(main.app) as c:
+        from app import auth
+        from app.db import User, SessionLocal
+        import uuid
+        with SessionLocal() as s:
+            user = User(phone="09"+str(uuid.uuid4().int % 1_000_000_000).zfill(9), full_name="کاربر آزمون",
+                        password_hash=auth.hash_password("test-password"), status="approved", is_admin=1)
+            s.add(user)
+            s.flush()
+            token, csrf = auth.issue_session(s, user)
+            c.user_id = user.id
+            c.phone = user.phone
+            s.commit()
+        c.cookies.set(auth.COOKIE, token)
+        c.headers["X-CSRF-Token"] = csrf
         c.enqueued = enqueued
         c.cancel_flags = flags
         yield c

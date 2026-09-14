@@ -17,6 +17,7 @@ Base = declarative_base()
 
 
 class JobStatus(str, enum.Enum):
+    OPEN = "open"
     QUEUED = "queued"
     RUNNING = "running"
     DONE = "done"
@@ -32,6 +33,8 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id = Column(String(36), index=True)
+    is_session = Column(Integer, default=0, nullable=False)
     title = Column(String(200))
     original_name = Column(String(512), nullable=False)
     stored_name = Column(String(512), nullable=False)
@@ -79,6 +82,7 @@ class Job(Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "is_session": bool(self.is_session),
             "original_name": self.original_name,
             "title": self.title,
             "display_title": self.title or self.original_name,
@@ -102,6 +106,96 @@ class Job(Base):
             "elapsed_sec": self.elapsed_sec(),
             "speed_factor": self.speed_factor(),
         }
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    phone = Column(String(11), nullable=False, unique=True)
+    full_name = Column(String(120), nullable=False)
+    password_hash = Column(Text, nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    is_admin = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    def to_dict(self):
+        return {"id": self.id, "phone": self.phone, "full_name": self.full_name,
+                "status": self.status, "is_admin": bool(self.is_admin),
+                "created_at": self.created_at.isoformat() if self.created_at else None}
+
+
+class LoginSession(Base):
+    __tablename__ = "login_sessions"
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    csrf_token = Column(String(64), nullable=False)
+    expires_at = Column(Integer, nullable=False)
+
+
+class BaleIdentity(Base):
+    __tablename__ = "bale_identities"
+    phone = Column(String(11), primary_key=True)
+    user_id = Column(String(32), nullable=False, unique=True)
+    chat_id = Column(String(32), nullable=False, unique=True)
+
+
+class VerificationChallenge(Base):
+    __tablename__ = "verification_challenges"
+    id = Column(String(64), primary_key=True)
+    phone = Column(String(11), nullable=False, index=True)
+    purpose = Column(String(16), nullable=False)
+    code_hash = Column(String(64))
+    expires_at = Column(Integer, nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)
+    delivered = Column(Integer, nullable=False, default=0)
+    used = Column(Integer, nullable=False, default=0)
+    created_at = Column(Integer, nullable=False)
+
+
+class BaleFlow(Base):
+    __tablename__ = "bale_flows"
+    chat_id = Column(String(32), primary_key=True)
+    challenge_id = Column(String(64), nullable=False)
+    expires_at = Column(Integer, nullable=False)
+
+
+class RateBucket(Base):
+    __tablename__ = "rate_buckets"
+    key = Column(String(100), primary_key=True)
+    count = Column(Integer, nullable=False, default=0)
+    expires_at = Column(Integer, nullable=False)
+
+
+class BotState(Base):
+    __tablename__ = "bot_state"
+    key = Column(String(40), primary_key=True)
+    value = Column(String(100), nullable=False)
+
+
+class AdminAudit(Base):
+    __tablename__ = "admin_audit"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    actor_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    action = Column(String(32), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class AudioClip(Base):
+    __tablename__ = "audio_clips"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String(36), nullable=False, index=True)
+    original_name = Column(String(200), nullable=False)
+    stored_name = Column(String(200), nullable=False)
+    position = Column(Integer, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    duration_sec = Column(Float)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    def to_dict(self):
+        return {"id": self.id, "original_name": self.original_name,
+                "position": self.position, "size_bytes": self.size_bytes,
+                "duration_sec": self.duration_sec}
 
 
 _connect_args = {}
@@ -133,18 +227,22 @@ def init_db(attempts: int = 5) -> None:
             raced = "already exists" in message or "database is locked" in message
             if not raced or attempt == attempts - 1:
                 raise
-            if "already exists" in message and inspect(engine).has_table(Job.__tablename__):
+            if "already exists" in message and all(inspect(engine).has_table(t.name) for t in Base.metadata.sorted_tables):
                 break
             time.sleep(0.2 * (attempt + 1))
 
-    # Additive migration preserves recordings created before optional titles.
-    if "title" not in {c["name"] for c in inspect(engine).get_columns("jobs")}:
-        try:
-            with engine.begin() as conn:
-                conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN title VARCHAR(200)")
-        except OperationalError:
-            if "title" not in {c["name"] for c in inspect(engine).get_columns("jobs")}:
-                raise
+    # Additive migration for existing installations; never replace stored jobs.
+    for name, ddl in {
+        "title": "VARCHAR(200)", "owner_id": "VARCHAR(36)",
+        "is_session": "INTEGER NOT NULL DEFAULT 0",
+    }.items():
+        if name not in {c["name"] for c in inspect(engine).get_columns("jobs")}:
+            try:
+                with engine.begin() as conn:
+                    conn.exec_driver_sql(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
+            except OperationalError:
+                if name not in {c["name"] for c in inspect(engine).get_columns("jobs")}:
+                    raise
 
     if config.DB_URL.startswith("sqlite"):
         # WAL lets the API read while a worker writes progress.
@@ -157,3 +255,9 @@ def counts_by_status() -> dict:
     with SessionLocal() as s:
         rows = s.query(Job.status, func.count(Job.id)).group_by(Job.status).all()
     return {(k.value if isinstance(k, JobStatus) else k): v for k, v in rows}
+
+
+def write_lock(session):
+    """Serialize close/upload/auth decisions on the supported SQLite deployment."""
+    if config.DB_URL.startswith("sqlite"):
+        session.connection().exec_driver_sql("BEGIN IMMEDIATE")
