@@ -26,6 +26,7 @@ progress, audio playback, timestamps, and downloadable transcripts.
 | [Setup](docs/SETUP.md) | Local installation, model preparation, testing without a model |
 | [Deployment](docs/DEPLOYMENT.md) | Docker Compose, offline deployment, HTTPS, backup, upgrades |
 | [Configuration](docs/CONFIGURATION.md) | CPU/memory sizing, model tiers, storage and queue settings |
+| [Visual architecture](docs/arcetecture.md) | System, processing, cancellation, lifecycle and deployment diagrams |
 | [Architecture and API](docs/ARCHITECTURE.md) | Pipeline, cancellation, endpoints and limitations |
 | [Contributing](CONTRIBUTING.md) | Development environment and tests |
 | [Changelog](CHANGELOG.md) | Release history |

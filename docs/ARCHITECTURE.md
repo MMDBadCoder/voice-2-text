@@ -1,5 +1,8 @@
 # Architecture and API
 
+For detailed system, sequence, lifecycle and deployment diagrams, see the
+[visual architecture guide](arcetecture.md).
+
 ```mermaid
 flowchart LR
     Browser[Persian RTL browser UI] --> API[FastAPI]
