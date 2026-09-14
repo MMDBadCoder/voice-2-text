@@ -1,0 +1,7 @@
+# ONLINE machine only -- used by scripts/fetch-offline-deps.sh to convert
+# HuggingFace checkpoints into CTranslate2 int8 format. Never installed on the
+# offline box (this is where the multi-GB torch dependency lives).
+ctranslate2==4.5.0
+transformers==4.48.0
+torch==2.5.1
+huggingface-hub==0.27.1

@@ -1,0 +1,61 @@
+# دستیار صوتی جلسات
+#
+#   docker compose up -d --scale worker=${WORKER_COUNT:-2}
+#
+# WORKER_COUNT / WORKER_CPU_THREADS / the *_LIMIT vars all come from .env, so
+# the pool is retuned by editing one file and re-running the command above.
+
+x-common: &common
+  build: .
+  image: voice-2-text:0.1.0
+  env_file: [.env]
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    DATA_DIR: /srv/data
+    DB_URL: sqlite:////srv/data/jobs.db
+    ASR_BACKEND: ${ASR_BACKEND:-faster_whisper}
+  restart: unless-stopped
+  depends_on:
+    redis: {condition: service_healthy}
+  volumes:
+    - ./data:/srv/data
+    - ./models:/srv/models:ro
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    restart: unless-stopped
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    <<: *common
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    ports: ["${HOST:-127.0.0.1}:${PORT:-8000}:8000"]
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPU_LIMIT:-1.5}"
+          memory: "${API_MEM_LIMIT:-2g}"
+
+  worker:
+    <<: *common
+    command: ["python", "-m", "app.worker"]
+    healthcheck:
+      disable: true
+    # No `ports` and no `container_name`: that is what makes --scale work.
+    deploy:
+      resources:
+        limits:
+          # Ceiling per worker CONTAINER. Keep >= WORKER_CPU_THREADS or the
+          # cgroup will throttle threads the model is actively using.
+          cpus: "${WORKER_CPU_LIMIT:-4.0}"
+          memory: "${WORKER_MEM_LIMIT:-6g}"
+
+volumes:
+  redis-data:

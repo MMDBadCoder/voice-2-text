@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block page_title %}{{ job.display_title }} — {{ title }}{% endblock %}
+{% block content %}
+<nav class="crumbs"><a href="/">→ بازگشت به ضبط‌ها</a></nav>
+<section id="job-card" class="detail-header">
+  <div class="card-head"><div><p class="eyebrow">از صدا به متن</p><h1 id="job-title">{{ job.display_title }}</h1></div><span class="status" id="job-status">در حال دریافت وضعیت…</span></div>
+  <div class="detail-sub"><div id="job-meta" class="meta"></div><div class="actions"><button id="cancel-btn" class="btn small" hidden>توقف تبدیل</button><button id="retry-btn" class="btn small" hidden>تلاش دوباره</button><button id="delete-btn" class="icon-button danger" aria-label="حذف ضبط"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button></div></div>
+</section>
+<section class="processing-panel" id="processing-panel" hidden>
+  <div class="processing-heading"><div><h2 id="job-stage" aria-live="polite">در حال آماده‌سازی…</h2><p id="progress-hint" class="muted"></p></div><strong id="job-percent" class="percent"></strong></div>
+  <div class="progress" id="job-progress" role="progressbar" aria-label="پیشرفت تبدیل" aria-valuemin="0" aria-valuemax="100"><div class="bar" id="job-bar"></div></div>
+  <div class="process-steps"><span>۱. دریافت صدا</span><span>۲. تبدیل به متن</span><span>۳. آمادهٔ خواندن</span></div>
+</section>
+<div id="job-error" class="error" hidden role="alert"></div>
+<p id="connection-error" class="inline-error" hidden role="status">ارتباط قطع شده؛ در حال تلاش دوباره…</p>
+<section class="reader" id="transcript-card" hidden>
+  <div class="reader-toolbar"><h2>متن ضبط</h2><div class="actions" id="job-actions"><button class="btn small" id="copy-btn">کپی متن</button><details class="download-menu"><summary class="btn primary small">دریافت فایل ↓</summary><div class="download-options">{% for format,label in [('docx','سند Word'),('plain','متن ساده'),('txt','متن با زمان'),('srt','زیرنویس SRT'),('vtt','زیرنویس VTT'),('json','دادهٔ JSON')] %}<a href="/api/jobs/{{ job.id }}/download?format={{ format }}">{{ label }}</a>{% endfor %}</div></details></div></div>
+  <div class="audio-wrap" id="audio-wrap" {% if job.audio_deleted %}hidden{% endif %}><span class="field-label">صدای اصلی</span><audio id="audio-player" controls preload="none" src="/api/jobs/{{ job.id }}/audio">مرورگر شما پخش صوت را پشتیبانی نمی‌کند.</audio></div>
+  <div class="reading-options"><span class="muted small">متن قابل انتخاب و کپی است.</span><label class="toggle"><input type="checkbox" id="ts-toggle">نمایش زمان‌ها</label></div>
+  <div class="stub-banner" id="stub-note" hidden role="alert">این متن آزمایشی و ساختگی است.</div>
+  <div id="transcript" class="transcript hide-ts"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script>window.APP = {page: "job", jobId: {{ job.id|tojson }}};</script>{% endblock %}

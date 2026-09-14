@@ -1,0 +1,30 @@
+# Runtime deps for the OFFLINE box. Deliberately no torch: faster-whisper runs
+# on CTranslate2 and decodes audio through PyAV, which bundles its own ffmpeg.
+# That keeps the wheel bundle near ~180 MB instead of >2 GB.
+#
+# Versions are floors, not pins. scripts/fetch-offline-deps.sh resolves them
+# once on the online machine and writes requirements.lock.txt -- that lock is
+# what the offline box installs, so the deployment is reproducible.
+
+# --- web ---
+fastapi>=0.115
+uvicorn[standard]>=0.34
+jinja2>=3.1.5
+python-multipart>=0.0.20
+pydantic>=2.10
+
+# --- queue + store ---
+rq>=2.1
+redis>=5.2
+sqlalchemy>=2.0.37
+
+# --- asr ---
+faster-whisper>=1.1.1
+av>=14.0
+onnxruntime>=1.20
+
+# --- export ---
+python-docx>=1.1.2
+
+# --- optional: speaker diarization (DIARIZATION_ENABLED=true) ---
+# sherpa-onnx>=1.10.39

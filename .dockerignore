@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+.venv
+.venv-*
+__pycache__
+**/__pycache__
+.pytest_cache
+data
+models
+logs
+HANDOFF.md
+.agents
+.codex
+tests
+docs
