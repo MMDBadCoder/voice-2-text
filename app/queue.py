@@ -37,6 +37,20 @@ def enqueue(job_id: str) -> str:
     return rq_job.id
 
 
+def enqueue_clip(job_id: str, clip_id: str) -> str | None:
+    """Queue a single session clip. Failure must not fail the upload itself."""
+    try:
+        rq_job = get_queue().enqueue(
+            "app.tasks.transcribe_clip", job_id, clip_id,
+            job_id=f"clip-{clip_id}", job_timeout=config.WORKER_JOB_TIMEOUT,
+            result_ttl=3600, failure_ttl=86400,
+        )
+        return rq_job.id
+    except Exception as exc:
+        log.warning("could not queue clip %s: %s", clip_id, exc)
+        return None
+
+
 def cancel(rq_job_id: str) -> bool:
     """Drop a job that is still waiting in the queue, so no worker picks it up."""
     try:

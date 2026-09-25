@@ -235,6 +235,40 @@ def _stop_process(process) -> None:
     process.wait()
 
 
+def transcribe_clip(job_id: str, clip_id: str) -> dict:
+    """Transcribe one uploaded clip and resolve its reserved transcript block.
+
+    Kept off the isolated-supervisor path on purpose: these are short additions
+    to an open session, and a fresh interpreter per clip would cost more in
+    model loading than the clip costs to decode.
+    """
+    from . import live
+    from .db import AudioClip
+
+    with SessionLocal() as session:
+        clip = session.query(AudioClip).filter_by(id=clip_id, job_id=job_id).first()
+        if clip is None:
+            return {"status": "missing"}
+        stored_name, duration = clip.stored_name, clip.duration_sec or 0.0
+
+    path = config.AUDIO_DIR / stored_name
+    try:
+        if not path.exists():
+            raise FileNotFoundError(str(path))
+        with SessionLocal() as session:
+            job = session.get(Job, job_id)
+            tier = (job.tier if job else None) or config.DEFAULT_TIER
+        result = asr.transcribe(str(path), tier=tier, duration_hint=duration or None)
+        text = " ".join(seg.text for seg in result.segments).strip()
+        live.resolve_file_block(job_id, clip_id, text, int((duration or 0) * 1000))
+        return {"status": "done", "chars": len(text)}
+    except Exception as exc:
+        log.exception("clip %s of job %s failed", clip_id, job_id)
+        live.resolve_file_block(job_id, clip_id, f"[تبدیل این فایل انجام نشد: {exc}]",
+                                int((duration or 0) * 1000), failed=True)
+        return {"status": "failed"}
+
+
 def run_isolated(job_id: str) -> dict:
     """Supervise the entire pipeline; cancellation never waits for a segment.
 

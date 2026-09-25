@@ -181,6 +181,35 @@ class AdminAudit(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class LiveBlock(Base):
+    """One appended chunk of a session transcript.
+
+    A live session grows one block at a time: `mic` blocks arrive from the
+    browser within seconds of being spoken, `file` blocks arrive when an
+    uploaded clip finishes in the queue. `seq` is the single ordering key, so
+    the two sources interleave by arrival rather than fighting over position.
+    """
+    __tablename__ = "live_blocks"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String(36), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    source = Column(String(16), nullable=False, default="mic")  # mic | file
+    state = Column(String(16), nullable=False, default="done")  # pending | done | failed
+    text = Column(Text, default="")
+    label = Column(String(200))
+    clip_id = Column(String(36))
+    duration_ms = Column(Integer, default=0)
+    edited = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    def to_dict(self):
+        return {"id": self.id, "seq": self.seq, "source": self.source,
+                "state": self.state, "text": self.text or "", "label": self.label,
+                "clip_id": self.clip_id, "duration_ms": self.duration_ms or 0,
+                "edited": bool(self.edited),
+                "created_at": self.created_at.isoformat() if self.created_at else None}
+
+
 class AudioClip(Base):
     __tablename__ = "audio_clips"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -249,6 +278,12 @@ def init_db(attempts: int = 5) -> None:
         with engine.connect() as conn:
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
             conn.exec_driver_sql("PRAGMA busy_timeout=30000")
+
+
+def next_block_seq(session, job_id: str) -> int:
+    """Next ordering slot for a session transcript."""
+    current = session.query(func.max(LiveBlock.seq)).filter(LiveBlock.job_id == job_id).scalar()
+    return (current or 0) + 1
 
 
 def counts_by_status() -> dict:

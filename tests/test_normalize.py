@@ -77,3 +77,10 @@ def test_stored_segments_are_normalized(monkeypatch, tmp_path):
     assert normalize(seg.text) == exported
     assert "ي" not in exported and "ك" not in exported
     assert f"می{ZWNJ}خوام" in exported
+
+
+def test_three_repeats_collapse():
+    """Live chunks are short, so Whisper's loop shows up as three repeats, not
+    five. Observed in a real run: 'می‌خواهم بگویم بگویم بگویم چه...'."""
+    assert collapse_repetitions("بگویم بگویم بگویم") == "بگویم"
+    assert collapse_repetitions("بله بله") == "بله بله"   # two is emphasis, not a loop

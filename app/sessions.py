@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import auth, config, db, media, queue as qmod, results, storage
+from . import auth, config, db, live, media, queue as qmod, results, storage
 from .db import AudioClip, Job, JobStatus, SessionLocal
 
 router = APIRouter()
@@ -84,7 +84,13 @@ async def append_clip(job_id: str, request: Request, file: UploadFile):
             job.size_bytes = (job.size_bytes or 0) + size
             job.duration_sec = (job.duration_sec or 0) + duration
             s.commit()
-            return clip.to_dict()
+            payload = clip.to_dict()
+
+        # Reserve the transcript slot now, so the block sits where the user
+        # dropped the file rather than wherever the queue happens to finish.
+        live.append_pending_file_block(job_id, cid, payload["original_name"])
+        qmod.enqueue_clip(job_id, cid)
+        return payload
     except storage.UploadError as exc:
         raise HTTPException(400, str(exc)) from exc
     except BaseException:

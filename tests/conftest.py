@@ -52,6 +52,13 @@ def client(monkeypatch):
         monkeypatch.setattr(mod, "is_cancel_requested", lambda jid: jid in flags)
         monkeypatch.setattr(mod, "clear_cancel", lambda jid: flags.discard(jid))
         monkeypatch.setattr(mod, "cancel", lambda rq_id: True)
+    clip_jobs = []
+    for mod in (qmod, main.qmod):
+        monkeypatch.setattr(mod, "enqueue_clip",
+                            lambda jid, cid: clip_jobs.append((jid, cid)) or f"clip-{cid}")
+    from app import sessions as sessions_mod
+    monkeypatch.setattr(sessions_mod.qmod, "enqueue_clip",
+                        lambda jid, cid: clip_jobs.append((jid, cid)) or f"clip-{cid}")
     monkeypatch.setattr(main.qmod, "position", lambda rq_id: 1)
     monkeypatch.setattr(main.qmod, "health", lambda: {"ok": True, "queued": len(enqueued), "workers": 1})
 
@@ -72,4 +79,5 @@ def client(monkeypatch):
         c.headers["X-CSRF-Token"] = csrf
         c.enqueued = enqueued
         c.cancel_flags = flags
+        c.clip_jobs = clip_jobs
         yield c

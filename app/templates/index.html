@@ -1,8 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-heading workspace-heading"><div><p class="eyebrow">فضای شخصی {{ request.state.user.full_name }}</p><h1>گفت‌وگوها، کنار هم.</h1><p class="muted">یک جلسه باز کنید، صداها را جمع کنید و وقتی آماده بودید، متن بگیرید.</p></div><button class="btn primary" id="new-session-btn">＋ جلسهٔ جدید</button></div>
-<section class="session-library"><div class="library-toolbar"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="session-search" type="search" placeholder="جست‌وجو در جلسه‌های من…" aria-label="جست‌وجو در جلسه‌ها"></label><span class="muted small" id="session-count"></span></div><div class="filter-tabs" role="group" aria-label="فیلتر جلسه‌ها"><button data-session-filter="" aria-pressed="true">همهٔ جلسه‌ها</button><button data-session-filter="open" aria-pressed="false">باز و قابل ویرایش</button><button data-session-filter="running" aria-pressed="false">در حال تبدیل</button><button data-session-filter="done" aria-pressed="false">آماده</button></div><div class="session-grid" id="session-list"><div class="skeleton"></div><div class="skeleton"></div></div><p class="inline-error" id="library-error" role="status"></p><div class="pagination"><button class="btn small" id="sessions-prev" hidden>صفحهٔ قبل</button><button class="btn small" id="sessions-next" hidden>صفحهٔ بعد</button></div></section>
-<dialog id="new-session-dialog" aria-labelledby="new-session-title"><form id="new-session-form"><p class="eyebrow">یک جای تازه برای صداها</p><h2 id="new-session-title">جلسهٔ جدید</h2><label class="field-label" for="session-title">عنوان جلسه</label><input class="text-input" id="session-title" name="title" placeholder="مثلاً جلسهٔ برنامه‌ریزی هفته" maxlength="200" required autofocus><fieldset class="tiers"><legend>روش تبدیل پس از بستن جلسه</legend><div class="tier-options">{% for t in tiers %}<label class="tier"><input type="radio" name="tier" value="{{ t.value }}" {% if t.value == default_tier %}checked{% endif %}><span><strong>{{ t.label }}</strong><small>{{ t.hint }}</small></span></label>{% endfor %}</div></fieldset><p class="field-hint">تا زمانی که جلسه را نبندید، تبدیل شروع نمی‌شود.</p><div class="actions"><button class="btn primary" id="create-session-submit">ساخت جلسه</button><button class="btn" type="button" id="dismiss-new-session">انصراف</button></div><p id="create-error" class="inline-error" role="alert"></p></form></dialog>
+<div class="page-heading">
+  <div>
+    <h1>جلسه‌ها</h1>
+    <p class="muted">صداها را جمع کنید یا زنده صحبت کنید؛ متن همان‌جا ساخته می‌شود.</p>
+  </div>
+  <button class="btn primary" id="new-session-btn"><svg aria-hidden="true"><use href="#i-plus"/></svg>جلسهٔ جدید</button>
+</div>
+
+<section class="session-library">
+  <div class="library-toolbar">
+    <label class="search-box">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="session-search" type="search" placeholder="جست‌وجو…" aria-label="جست‌وجو در جلسه‌ها">
+    </label>
+    <span class="count" id="session-count"></span>
+  </div>
+  <div class="filter-tabs" role="group" aria-label="فیلتر جلسه‌ها">
+    <button data-session-filter="" aria-pressed="true">همه</button>
+    <button data-session-filter="open" aria-pressed="false">باز</button>
+    <button data-session-filter="running" aria-pressed="false">در حال تبدیل</button>
+    <button data-session-filter="done" aria-pressed="false">آماده</button>
+  </div>
+  <div class="session-grid" id="session-list"><div class="skeleton"></div><div class="skeleton"></div></div>
+  <p class="inline-error" id="library-error" role="status"></p>
+  <div class="pagination">
+    <button class="btn small" id="sessions-prev" hidden>قبلی</button>
+    <button class="btn small" id="sessions-next" hidden>بعدی</button>
+  </div>
+</section>
+
+<dialog id="new-session-dialog" aria-labelledby="new-session-title"><form id="new-session-form">
+  <h2 id="new-session-title">جلسهٔ جدید</h2>
+  <label class="field-label" for="session-title">عنوان</label>
+  <input class="text-input" id="session-title" name="title" placeholder="مثلاً جلسهٔ برنامه‌ریزی هفته" maxlength="200" required autofocus>
+  <fieldset class="tiers">
+    <legend>روش تبدیل</legend>
+    <div class="tier-options">
+      {% for t in tiers %}
+      <label class="tier">
+        <input type="radio" name="tier" value="{{ t.value }}" {% if t.value == default_tier %}checked{% endif %}>
+        <span><strong>{{ t.label }}</strong><small>{{ t.hint }}</small></span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <div class="actions">
+    <button class="btn primary" id="create-session-submit">ساخت جلسه</button>
+    <button class="btn" type="button" id="dismiss-new-session">انصراف</button>
+  </div>
+  <p id="create-error" class="inline-error" role="alert"></p>
+</form></dialog>
 {% endblock %}
 {% block scripts %}<script>window.APP = {page: "workspace"};</script>{% endblock %}
-{% block page_scripts %}<script src="/static/sessions.js?v=3" defer></script>{% endblock %}
+{% block page_scripts %}<script src="/static/sessions.js?v=5" defer></script>{% endblock %}

@@ -7,29 +7,68 @@
   <meta name="theme-color" content="#fafbf9">
   <title>{% block page_title %}{{ title }}{% endblock %}</title>
   <link rel="preload" href="/static/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/app.css?v=3">
+  <link rel="stylesheet" href="/static/app.css?v=5">
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 </head>
 <body>
   <a href="#main" class="skip-link">رفتن به محتوای اصلی</a>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12m-4-4 4 4 4-4M5 19h14"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h9"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/></symbol>
+  </defs></svg>
+
   <header class="site-header"><div class="wrap header-inner">
-    <a class="brand" href="/" aria-label="{{ title }}"><img src="/static/mark.svg" width="38" height="38" alt=""><span>واژه<span class="brand-caption">دستیار صوتی جلسات</span></span></a>
+    <a class="brand" href="/" aria-label="{{ title }}">
+      <img src="/static/mark.svg" width="26" height="26" alt="">
+      <span>واژه<span class="brand-caption">دستیار صوتی جلسات</span></span>
+    </a>
     {% if request.state.user %}
-    <nav aria-label="ناوبری اصلی"><a href="/" class="nav-link">جلسه‌های من</a>{% if request.state.user.is_admin %}<a href="/admin" class="nav-link">مدیریت کاربران</a>{% endif %}</nav>
-    <details class="user-menu"><summary>{{ request.state.user.full_name }} <span aria-hidden="true">⌄</span></summary><div class="download-options"><a href="/account">حساب و رمز عبور</a><button id="logout-btn" type="button">خروج از حساب</button></div></details>
-    {% else %}<span class="muted small">هر گفت‌وگو، یک جای امن.</span>{% endif %}
-    <span class="privacy auth-privacy"><span class="privacy-dot"></span>صدای شما، پیش خودتان</span>
+    <nav aria-label="ناوبری اصلی">
+      <a href="/" class="nav-link">جلسه‌ها</a>
+      {% if request.state.user.is_admin %}<a href="/admin" class="nav-link">کاربران</a>{% endif %}
+    </nav>
+    <details class="user-menu">
+      <summary>{{ request.state.user.full_name }} <svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+      <div class="download-options">
+        <a href="/account">حساب و رمز عبور</a>
+        <button id="logout-btn" type="button">خروج</button>
+      </div>
+    </details>
+    {% endif %}
   </div></header>
+
   {% if stub_mode %}
-  <div class="stub-banner wrap" role="alert"><strong>حالت آزمایشی — متن‌ها ساختگی هستند.</strong> برای تبدیل واقعی، <code>ASR_BACKEND=faster_whisper</code> را تنظیم کنید.</div>
+  <div class="stub-banner wrap" role="alert"><strong>حالت آزمایشی — متن‌ها ساختگی هستند.</strong> برای تبدیل واقعی <code>ASR_BACKEND=faster_whisper</code> را تنظیم کنید.</div>
   {% endif %}
+
   <main class="wrap" id="main">{% block content %}{% endblock %}</main>
-  <footer class="site-footer wrap"><span>از گفت‌وگو، به واژه.</span><span>پردازش محلی · بدون ارسال به سرویس‌های دیگر</span></footer>
+
+  <footer class="site-footer wrap">
+    <span>از گفت‌وگو، به واژه.</span>
+    <span>پردازش محلی · بدون ارسال به سرویس‌های دیگر</span>
+  </footer>
+
   <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">حذف این ضبط؟</h2><p>جلسه، همهٔ فایل‌های صوتی و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p><div class="actions"><button class="btn danger-fill" value="delete">حذف ضبط</button><button class="btn" value="cancel" autofocus>انصراف</button></div></form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog">
+    <h2 id="confirm-title">حذف این جلسه؟</h2>
+    <p>همهٔ فایل‌های صوتی و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p>
+    <div class="actions"><button class="btn danger-fill" value="delete">حذف</button><button class="btn" value="cancel" autofocus>انصراف</button></div>
+  </form></dialog>
+
   {% block scripts %}{% endblock %}
-  <script src="/static/common.js?v=3" defer></script>
-  <script src="/static/app.js?v=3" defer></script>
+  <script src="/static/common.js?v=5" defer></script>
+  <script src="/static/app.js?v=5" defer></script>
   {% block page_scripts %}{% endblock %}
 </body>
 </html>

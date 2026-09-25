@@ -73,6 +73,18 @@ INITIAL_PROMPT = _str(
 )
 
 # --------------------------------------------------------------------- vad ---
+# ------------------------------------------------------------ live (mic) ---
+# Live chunks run in the API process, not the queue: a queued live chunk would
+# wait behind a 40-minute meeting. LIVE_CPU_THREADS is therefore spent from the
+# cores RESERVED_CORES keeps away from the worker pool.
+LIVE_ENABLED = _bool("LIVE_ENABLED", True)
+LIVE_TIER = _str("LIVE_TIER", "fast")
+LIVE_CPU_THREADS = _int("LIVE_CPU_THREADS", 2)
+LIVE_MAX_CONCURRENT = _int("LIVE_MAX_CONCURRENT", 1)   # simultaneous decodes
+LIVE_MAX_QUEUED = _int("LIVE_MAX_QUEUED", 3)           # backlog before shedding
+LIVE_BEAM_SIZE = _int("LIVE_BEAM_SIZE", 1)
+LIVE_WARM_ON_START = _bool("LIVE_WARM_ON_START", False)
+
 VAD_ENABLED = _bool("VAD_ENABLED", True)
 VAD_MIN_SILENCE_MS = _int("VAD_MIN_SILENCE_MS", 500)
 VAD_SPEECH_PAD_MS = _int("VAD_SPEECH_PAD_MS", 200)
@@ -137,6 +149,15 @@ def validate(role: str = "api") -> list[str]:
             f"(RESERVED_CORES={RESERVED_CORES}). Lower the pool or RESERVED_CORES."
         )
 
+    if LIVE_ENABLED and LIVE_TIER not in ENABLED_TIERS:
+        raise ConfigError(
+            f"LIVE_TIER={LIVE_TIER!r} is not in ENABLED_TIERS={ENABLED_TIERS}")
+    if LIVE_ENABLED and requested + LIVE_CPU_THREADS > cores:
+        warnings.append(
+            f"live transcription wants {LIVE_CPU_THREADS} more thread(s) on top of the "
+            f"worker pool's {requested}, on {cores} cores -- live latency will suffer "
+            f"while a batch job runs.")
+
     if DEFAULT_TIER not in ENABLED_TIERS:
         raise ConfigError(f"DEFAULT_TIER={DEFAULT_TIER!r} is not in ENABLED_TIERS={ENABLED_TIERS}")
     for tier in ENABLED_TIERS:
@@ -172,9 +193,9 @@ def validate(role: str = "api") -> list[str]:
     return warnings
 
 
-def apply_thread_env() -> None:
+def apply_thread_env(threads: int | None = None) -> None:
     """Must run BEFORE ctranslate2/onnxruntime are imported."""
-    n = str(WORKER_CPU_THREADS)
+    n = str(threads or WORKER_CPU_THREADS)
     for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ.setdefault(var, n)
 

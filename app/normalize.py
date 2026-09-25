@@ -60,7 +60,7 @@ _RE_STRAY_ZWNJ = re.compile(r"(?<![؀-ۿ])" + ZWNJ + r"|" + ZWNJ + r"(?![؀-ۿ])
 _RE_MULTI_NEWLINE = re.compile(r"\n{3,}")
 
 # Whisper's signature failure on silence: the same phrase repeated forever.
-_RE_REPEATED_WORD = re.compile(r"\b(\S+)(\s+\1\b){3,}")
+_RE_REPEATED_WORD = re.compile(r"\b(\S+)(\s+\1\b){2,}")
 
 
 def _fix_punctuation_forms(text: str) -> str:

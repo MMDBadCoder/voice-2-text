@@ -16,9 +16,11 @@ from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, RedirectResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 
-from . import __version__, accounts, auth, config, db, exporters, queue as qmod, results, sessions, storage
+from . import (__version__, accounts, auth, config, db, exporters, live,
+               queue as qmod, results, sessions, storage)
 from .db import AudioClip, Job, JobStatus, SessionLocal
 
 log = logging.getLogger(__name__)
@@ -40,12 +42,17 @@ async def lifespan(app: FastAPI):
         "api ready: %d worker(s) x %d thread(s) = %d of %d cores; backend=%s",
         config.WORKER_COUNT, config.WORKER_CPU_THREADS, requested, cores, config.ASR_BACKEND,
     )
+    if config.LIVE_ENABLED and config.LIVE_WARM_ON_START:
+        # Off by default: this pins the live model in the web process, which is
+        # the right trade only when someone is actually going to speak.
+        await run_in_threadpool(live.engine.warm)
     yield
 
 
 app = FastAPI(title=config.APP_TITLE, version=__version__, lifespan=lifespan)
 app.include_router(accounts.router)
 app.include_router(sessions.router)
+app.include_router(live.router)
 
 
 @app.middleware("http")
