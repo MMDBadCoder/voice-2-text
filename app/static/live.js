@@ -38,7 +38,7 @@
       this.acc = [];           // resampled 16k float frames awaiting analysis
       this.accLen = 0;
       this.ratio = 1;
-      this.carry = 0;
+      this.resampleCarry = 0;   // fractional read index across frame boundaries
 
       this.preroll = [];       // ring of recent frames, used as utterance onset
       this.prerollFrames = Math.ceil(PREROLL_MS / FRAME_MS);
@@ -129,12 +129,12 @@
     /** Resample the native-rate frame to 16 kHz and hand it to the detector. */
     ingest(frame) {
       const out = [];
-      let i = this.carry;
+      let i = this.resampleCarry;
       while (i < frame.length) {
         out.push(frame[Math.floor(i)]);
         i += this.ratio;
       }
-      this.carry = i - frame.length;
+      this.resampleCarry = i - frame.length;
 
       this.acc.push(Float32Array.from(out));
       this.accLen += out.length;
