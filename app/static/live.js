@@ -53,6 +53,13 @@
     }
 
     async start() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // Browsers hide the microphone API entirely outside a secure context,
+        // so this is an origin problem, not a permission the user refused.
+        const err = new Error("INSECURE_ORIGIN");
+        err.code = "INSECURE_ORIGIN";
+        throw err;
+      }
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,

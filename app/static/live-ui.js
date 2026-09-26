@@ -11,19 +11,20 @@
   const emptyEl = $("transcript-empty");
   const countEl = $("transcript-count");
   const stateEl = $("live-state");
-  const stateText = $("live-state-text");
+  const composer = $("composer");
   const latencyEl = $("live-latency");
   const meter = $("level-meter");
   const startBtn = $("live-start");
   const stopBtn = $("live-stop");
   const errEl = $("live-error");
 
-  const BARS = 14;
+  const BARS = 28;
   for (let i = 0; i < BARS; i++) meter.appendChild(document.createElement("i"));
   const bars = [...meter.children];
 
   const STATE_TEXT = {
     idle: "آمادهٔ شنیدن",
+    starting: "در حال آماده‌سازی…",
     listening: "در حال شنیدن…",
     speaking: "در حال صحبت…",
     working: "در حال تبدیل…",
@@ -38,14 +39,19 @@
 
   function setState(name) {
     stateEl.dataset.state = name;
-    stateText.textContent = STATE_TEXT[name] || name;
+    stateEl.className = "dot " + ({ listening:"open", speaking:"running",
+      working:"queued", error:"failed", disconnected:"failed" }[name] || "");
+    stateEl.textContent = STATE_TEXT[name] || name;
   }
 
+  // Mirror the level outward from the centre: reads as a waveform, not a gauge.
   function setLevel(value) {
-    const lit = Math.round(value * BARS);
+    const mid = (BARS - 1) / 2;
     bars.forEach((bar, i) => {
-      bar.classList.toggle("on", i < lit);
-      bar.style.height = `${20 + (i < lit ? value * 80 : 0)}%`;
+      const d = Math.abs(i - mid) / mid;               // 0 centre .. 1 edge
+      const h = Math.max(0.12, value * (1 - d * 0.75) * (0.75 + Math.random() * 0.5));
+      bar.style.height = `${Math.min(100, h * 100)}%`;
+      bar.classList.toggle("on", h > 0.2);
     });
   }
 
@@ -61,18 +67,17 @@
 
   function blockNode(block) {
     const el = document.createElement("article");
-    el.className = "live-block";
+    el.className = "blk";
     el.dataset.source = block.source;
     el.dataset.state = block.state;
     el.dataset.id = block.id;
-    const secs = Math.round((block.duration_ms || 0) / 1000);
     el.innerHTML =
-      `<div class="live-block-head">
-         <span>${block.source === "file" ? esc(block.label || "فایل") : (secs ? fa(secs) + " ثانیه" : "میکروفن")}</span>
-         <button class="icon-button danger" data-del aria-label="حذف این بخش"><svg aria-hidden="true"><use href="#i-trash"/></svg></button>
+      `${block.source === "file" ? `<div class="blk-tag">${esc(block.label || "فایل صوتی")}</div>` : ""}
+       <div class="blk-tools">
+         <button class="iconbtn danger" data-del aria-label="حذف این بخش"><svg aria-hidden="true"><use href="#i-trash"/></svg></button>
        </div>
-       <div class="live-block-text" contenteditable="true" spellcheck="false"></div>`;
-    const textEl = el.querySelector(".live-block-text");
+       <div class="blk-text" contenteditable="true" spellcheck="false"></div>`;
+    const textEl = el.querySelector(".blk-text");
     if (block.state === "pending") {
       textEl.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
       textEl.removeAttribute("contenteditable");
@@ -91,9 +96,9 @@
 
   function placeholder(seq) {
     const el = document.createElement("article");
-    el.className = "live-block";
+    el.className = "blk";
     el.dataset.state = "pending";
-    el.innerHTML = `<div class="live-block-text"><span class="typing"><i></i><i></i><i></i></span></div>`;
+    el.innerHTML = `<div class="blk-text"><span class="typing"><i></i><i></i><i></i></span></div>`;
     listEl.appendChild(el);
     listEl.scrollTop = listEl.scrollHeight;
     pending.set(seq, el);
@@ -110,9 +115,9 @@
 
   // ---- edits ----------------------------------------------------------
   listEl.addEventListener("focusout", async (e) => {
-    const textEl = e.target.closest(".live-block-text[contenteditable]");
+    const textEl = e.target.closest(".blk-text[contenteditable]");
     if (!textEl) return;
-    const wrap = textEl.closest(".live-block");
+    const wrap = textEl.closest(".blk");
     const id = wrap?.dataset.id;
     if (!id) return;
     const block = blocks.find((b) => b.id === id);
@@ -133,7 +138,7 @@
   listEl.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
-    const wrap = btn.closest(".live-block");
+    const wrap = btn.closest(".blk");
     const id = wrap?.dataset.id;
     if (!id) return;
     try {
@@ -176,6 +181,7 @@
         setState(session && session.running ? "listening" : "stopped");
       } else if (msg.type === "error") {
         dropPlaceholder(msg.client_seq);
+        errEl.hidden = false;
         errEl.textContent = msg.message || "خطا در تبدیل";
         setState("error");
       }
@@ -183,20 +189,29 @@
   };
 
   async function start() {
-    errEl.textContent = "";
+    errEl.textContent = ""; errEl.hidden = true;
     startBtn.disabled = true;
     try {
       session = new window.LiveSession(jobId, handlers);
       await session.start();
       startBtn.hidden = true;
       stopBtn.hidden = false;
-      document.getElementById("live-mode").classList.add("capturing");
+      composer.classList.add("live");
     } catch (err) {
       session = null;
-      const denied = err && /denied|NotAllowed/i.test(err.name + err.message);
-      errEl.textContent = denied
-        ? "اجازهٔ دسترسی به میکروفن داده نشد."
-        : (err.message || "شروع ضبط ممکن نشد.");
+      errEl.hidden = false;
+      if (err && err.code === "INSECURE_ORIGIN") {
+        errEl.innerHTML =
+          "مرورگر میکروفن را فقط روی <b>HTTPS</b> یا <b>localhost</b> در دسترس می‌گذارد. " +
+          "برای آزمایش روی HTTP، این نشانی را در " +
+          "<code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> " +
+          "به‌عنوان مبدأ امن اضافه کنید، یا از تونل SSH روی localhost استفاده کنید.";
+      } else {
+        const denied = err && /denied|NotAllowed|Permission/i.test(err.name + err.message);
+        errEl.textContent = denied
+          ? "اجازهٔ دسترسی به میکروفن داده نشد. از نوار نشانی مرورگر آن را مجاز کنید."
+          : (err.message || "شروع ضبط ممکن نشد.");
+      }
       setState("error");
     } finally {
       startBtn.disabled = false;
@@ -211,7 +226,7 @@
       stopBtn.disabled = false;
       stopBtn.hidden = true;
       startBtn.hidden = false;
-      document.getElementById("live-mode").classList.remove("capturing");
+      composer.classList.remove("live");
       setLevel(0);
       setState("idle");
     }
@@ -231,9 +246,11 @@
       refreshCount();
       if (!data.live_enabled) {
         startBtn.disabled = true;
+        errEl.hidden = false;
         errEl.textContent = "رونویسی زنده در این سرور فعال نیست.";
       }
     } catch (err) {
+      errEl.hidden = false;
       errEl.textContent = err.message;
     }
   })();

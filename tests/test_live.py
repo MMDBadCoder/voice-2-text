@@ -180,3 +180,33 @@ def test_clip_block_resolves_when_the_queue_finishes(client):
     assert item["state"] == "done"
     assert item["text"] == "متن فایل بارگذاری‌شده"
     assert live.session_text(job_id) == "متن فایل بارگذاری‌شده"
+
+
+def test_engine_caches_one_model_per_tier(monkeypatch):
+    """Regression: the per-tier refactor left a stale `return self._model`, so
+    warm-up crashed the API at startup. The stub backend never loads a model,
+    so only a test that exercises _load directly catches this."""
+    from app import config, live
+
+    built = []
+
+    class FakeModel:
+        def __init__(self, path, **kw):
+            built.append(path)
+
+    monkeypatch.setattr(config, "ASR_BACKEND", "faster_whisper")
+    monkeypatch.setattr(config, "resolve_model_path", lambda tier: f"/models/{tier}")
+    import sys, types
+    fake = types.ModuleType("faster_whisper")
+    fake.WhisperModel = FakeModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+
+    engine = live.LiveEngine()
+    first = engine._load("fast")
+    assert isinstance(first, FakeModel)
+    assert engine._load("fast") is first          # cached, not rebuilt
+    other = engine._load("accurate")
+    assert other is not first                     # separate model per tier
+    assert built == ["/models/fast", "/models/accurate"]
+
+    engine.warm("fast")                           # must not raise

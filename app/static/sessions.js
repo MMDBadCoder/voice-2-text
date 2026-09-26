@@ -1,44 +1,243 @@
-(() => {
-  'use strict';
-  const {api,esc,fa,toast,csrf,duration,date}=window.Vazhe,$=id=>document.getElementById(id),cfg=window.APP||{};
-  const post=(url,body)=>api(url,{method:'POST',...(body?{body:JSON.stringify(body)}:{})});
-  const labels={open:'باز',queued:'در صف',running:'در حال تبدیل',done:'آماده',failed:'ناموفق',canceled:'متوقف',canceling:'در حال توقف'};
-  const state=j=>j.stage==='canceling'?'canceling':j.status;
-  if(cfg.page==='workspace'){
-    let offset=0,filter='',timer,debounce,version=0;
-    async function load(){clearTimeout(timer);const v=++version;try{const data=await api('/api/jobs?'+new URLSearchParams({limit:24,offset,status:filter,search:$('session-search').value}));if(v!==version)return;$('session-count').textContent=`${fa(data.total)} جلسه`;$('sessions-prev').hidden=!offset;$('sessions-next').hidden=offset+data.items.length>=data.total;
-      $('session-list').innerHTML=data.items.length?data.items.map(j=>{const st=state(j),href=j.is_session?`/sessions/${j.id}`:`/jobs/${j.id}`;const bits=[esc(date(j.created_at))];if(j.clip_count)bits.push(`${fa(j.clip_count)} فایل`);if(j.duration_sec)bits.push(`<span dir="ltr">${duration(j.duration_sec)}</span>`);bits.push(j.tier==='accurate'?'دقیق':'سریع');return `<a class="session-tile" href="${href}"><div class="session-tile-head"><strong>${esc(j.display_title)}</strong><span class="status ${st}">${labels[st]}</span></div><div class="tile-meta">${bits.join('<span class="sep">·</span>')}</div>${st==='running'?`<div class="job-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(j.progress*100)}" aria-label="پیشرفت تبدیل"><div class="bar" style="width:${Math.min(99,Math.floor(j.progress*100))}%"></div></div>`:''}</a>`;}).join(''):`<div class="empty">${filter||$('session-search').value?'جلسه‌ای پیدا نشد':'هنوز جلسه‌ای ندارید'}</div>`;
-      $('library-error').textContent='';timer=setTimeout(load,data.items.some(j=>['queued','running','canceling'].includes(state(j)))?2000:10000);
-    }catch(e){$('library-error').textContent=e.message;timer=setTimeout(load,5000);}}
-    $('new-session-btn').addEventListener('click',()=>$('new-session-dialog').showModal());$('dismiss-new-session').addEventListener('click',()=>$('new-session-dialog').close());
-    $('new-session-form').addEventListener('submit',async e=>{e.preventDefault();$('create-session-submit').disabled=true;try{const j=await post('/api/sessions',Object.fromEntries(new FormData(e.target)));location.href=`/sessions/${j.id}`;}catch(err){$('create-error').textContent=err.message;$('create-session-submit').disabled=false;}});
-    $('session-search').addEventListener('input',()=>{clearTimeout(debounce);version++;debounce=setTimeout(()=>{offset=0;load();},250);});
-    document.querySelectorAll('[data-session-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.sessionFilter;offset=0;document.querySelectorAll('[data-session-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));load();}));
-    $('sessions-prev').addEventListener('click',()=>{offset=Math.max(0,offset-24);load();});$('sessions-next').addEventListener('click',()=>{offset+=24;load();});load();
+/** Sessions: the index grid, and the clip/close controls on a session page. */
+(function () {
+  "use strict";
+  const V = window.Vazhe; if (!V) return;
+  const { api, esc, fa, toast, duration, date } = V;
+  const $ = (id) => document.getElementById(id);
+  const cfg = window.APP || {};
+
+  const LABEL = { open:"باز", queued:"در صف", running:"در حال تبدیل",
+                  done:"آماده", failed:"ناموفق", canceled:"متوقف", canceling:"در حال توقف" };
+  const state = (j) => (j.stage === "canceling" ? "canceling" : j.status);
+
+  /* ═══════════════════════════════════════════════════ index ══════════ */
+  if (cfg.page === "workspace") {
+    let offset = 0, filter = "", timer, debounce, version = 0;
+
+    async function load() {
+      clearTimeout(timer);
+      const v = ++version;
+      try {
+        const data = await api("/api/jobs?" + new URLSearchParams({
+          limit: 24, offset, status: filter, search: $("session-search")?.value || "",
+        }));
+        if (v !== version) return;
+        $("session-count").textContent = `${fa(data.total)} جلسه`;
+        $("sessions-prev").hidden = !offset;
+        $("sessions-next").hidden = offset + data.items.length >= data.total;
+
+        $("session-list").innerHTML = data.items.length
+          ? data.items.map((j) => {
+              const st = state(j);
+              const href = j.is_session ? `/sessions/${j.id}` : `/jobs/${j.id}`;
+              const bits = [esc(date(j.created_at))];
+              if (j.clip_count) bits.push(`${fa(j.clip_count)} فایل`);
+              if (j.duration_sec) bits.push(`<span dir="ltr">${duration(j.duration_sec)}</span>`);
+              bits.push(j.tier === "accurate" ? "دقیق" : "سریع");
+              return `<a class="card" href="${href}">
+                <div class="card-t"><strong>${esc(j.display_title)}</strong>
+                  <span class="dot ${st}">${LABEL[st] || st}</span></div>
+                <div class="card-m">${bits.join('<span class="sep">·</span>')}</div>
+                ${st === "running" ? `<div class="bar"><i style="width:${Math.min(99, Math.floor(j.progress*100))}%"></i></div>` : ""}
+              </a>`;
+            }).join("")
+          : `<div class="blank" style="grid-column:1/-1"><h3>${
+               filter || $("session-search")?.value ? "چیزی پیدا نشد" : "هنوز جلسه‌ای ندارید"
+             }</h3><p>با «جلسهٔ جدید» شروع کنید.</p></div>`;
+
+        $("library-error").textContent = "";
+        const busy = data.items.some((j) => ["queued","running","canceling"].includes(state(j)));
+        timer = setTimeout(load, busy ? 2500 : 12000);
+      } catch (e) {
+        $("library-error").textContent = e.message;
+        timer = setTimeout(load, 6000);
+      }
+    }
+
+    document.querySelectorAll("[data-session-filter]").forEach((b) =>
+      b.addEventListener("click", () => {
+        document.querySelectorAll("[data-session-filter]").forEach((x) =>
+          x.setAttribute("aria-pressed", String(x === b)));
+        filter = b.dataset.sessionFilter; offset = 0; load();
+      }));
+    $("session-search")?.addEventListener("input", () => {
+      clearTimeout(debounce); debounce = setTimeout(() => { offset = 0; load(); }, 250);
+    });
+    $("sessions-prev")?.addEventListener("click", () => { offset = Math.max(0, offset - 24); load(); });
+    $("sessions-next")?.addEventListener("click", () => { offset += 24; load(); });
+    load();
   }
-  if(cfg.page==='session'){
-    const jid=cfg.jobId;let job=null,clips=[],timer,signature='',pending=[],uploading=false;const locks=new Set();
-    const isOpen=()=>job?.status==='open';
-    function controls(){const blocked=uploading||locks.size>0||pending.length>0;$('close-session').disabled=!isOpen()||!clips.length||blocked;$('clip-input').disabled=!isOpen()||uploading;$('retry-uploads').hidden=!pending.length||uploading;$('discard-uploads').hidden=!pending.length||uploading;document.querySelectorAll('[data-clip-action]').forEach(b=>b.disabled=uploading||!isOpen());}
-    async function refresh(){clearTimeout(timer);try{const data=await api(`/api/sessions/${jid}/clips`);job=data.job;clips=data.items;const st=state(job);$('session-status').className=`status ${st}`;$('session-status').textContent=labels[st];$('session-summary').textContent=`${fa(clips.length)} فایل · ${duration(job.duration_sec)} · ${job.tier==='accurate'?'تبدیل دقیق':'تبدیل سریع'}`;$('clip-count').textContent=fa(clips.length);
-      $('add-audio-panel').hidden=!isOpen();$('close-panel').hidden=!isOpen();$('view-transcript').hidden=isOpen();$('reopen-session').hidden=!['failed','canceled'].includes(st);document.querySelector('.session-editor').classList.toggle('session-locked',!isOpen());
-      const key=JSON.stringify([clips,isOpen()]);if(signature!==key){signature=key;$('clip-list').innerHTML=clips.length?clips.map((c,i)=>`<article class="clip-row" data-clip="${c.id}"><span class="clip-number">${fa(i+1)}</span><div class="clip-info"><div class="clip-name">${esc(c.original_name)}</div><small>${duration(c.duration_sec)} · ${fa((c.size_bytes/1024/1024).toFixed(1))} مگابایت</small><details class="clip-preview"><summary class="small muted">شنیدن این بخش</summary><audio controls preload="none" src="/api/sessions/${jid}/clips/${c.id}/audio"></audio></details></div>${isOpen()?`<div class="clip-tools"><button class="icon-button" data-clip-action="up" data-id="${c.id}" aria-label="انتقال به بالا" ${i===0?'hidden':''}>↑</button><button class="icon-button" data-clip-action="down" data-id="${c.id}" aria-label="انتقال به پایین" ${i===clips.length-1?'hidden':''}>↓</button><button class="icon-button danger" data-clip-action="delete" data-id="${c.id}" aria-label="حذف فایل">×</button></div>`:''}</article>`).join(''):'<div class="empty"><h3>هنوز صدایی اضافه نشده است</h3><p>یک فایل بارگذاری کنید یا اولین بخش را با میکروفن ضبط کنید.</p></div>';}
-      controls();$('clip-error').textContent='';timer=setTimeout(refresh,5000);
-    }catch(e){$('clip-error').textContent=e.message;timer=setTimeout(refresh,5000);}}
-    function upload(file){return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',`/api/sessions/${jid}/clips`);xhr.setRequestHeader('X-CSRF-Token',csrf());const form=new FormData();form.append('file',file);$('clip-upload-progress').hidden=false;
-      xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable){const pct=Math.floor(e.loaded/e.total*100);$('clip-upload-bar').style.width=pct+'%';$('clip-upload-progress').setAttribute('aria-valuenow',pct);$('clip-upload-status').textContent=pct===100?'فایل دریافت شد؛ در حال بررسی…':`${file.name} · ${fa(pct)}٪`;}});
-      xhr.addEventListener('load',()=>{if(xhr.status===201)resolve();else{let message='بارگذاری انجام نشد';try{const body=JSON.parse(xhr.responseText);if(typeof body.detail==='string')message=body.detail;}catch{}reject(new Error(message));}});xhr.addEventListener('error',()=>reject(new Error('ارتباط قطع شد؛ فایل روی دستگاه شما باقی است.')));xhr.addEventListener('abort',()=>reject(new Error('بارگذاری متوقف شد')));xhr.send(form);});}
-    async function drain(){if(uploading||!pending.length||!isOpen())return;uploading=true;controls();try{while(pending.length){await upload(pending[0]);pending.shift();await refresh();}$('clip-upload-status').textContent='فایل‌ها به جلسه اضافه شدند.';}catch(e){$('clip-upload-status').textContent=e.message;toast(e.message);}finally{uploading=false;$('clip-upload-progress').hidden=true;controls();}}
-    function addFiles(files){if(!isOpen()||uploading)return;pending.push(...Array.from(files));drain();}
-    $('clip-input').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});$('retry-uploads').addEventListener('click',drain);$('discard-uploads').addEventListener('click',()=>{pending=[];$('clip-upload-status').textContent='';controls();});
-    ['dragenter','dragover'].forEach(ev=>$('clip-dropzone').addEventListener(ev,e=>{e.preventDefault();if(!uploading)$('clip-dropzone').classList.add('dragover');}));['dragleave','drop'].forEach(ev=>$('clip-dropzone').addEventListener(ev,e=>{e.preventDefault();$('clip-dropzone').classList.remove('dragover');}));$('clip-dropzone').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-    $('clip-list').addEventListener('click',async e=>{const b=e.target.closest('[data-clip-action]');if(!b)return;b.disabled=true;try{if(b.dataset.clipAction==='delete'){if(!confirm('این فایل از جلسه حذف شود؟'))return;await api(`/api/sessions/${jid}/clips/${b.dataset.id}`,{method:'DELETE'});}else{const ids=clips.map(c=>c.id),from=ids.indexOf(b.dataset.id),to=from+(b.dataset.clipAction==='up'?-1:1);if(to<0||to>=ids.length)return;[ids[from],ids[to]]=[ids[to],ids[from]];await post(`/api/sessions/${jid}/order`,{clip_ids:ids});}await refresh();}catch(err){toast(err.message);}finally{controls();}});
-    document.querySelectorAll('[data-audio-mode]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-audio-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('upload-mode').hidden=b.dataset.audioMode!=='upload';$('record-mode').hidden=b.dataset.audioMode!=='record';const lm=$('live-mode');if(lm)lm.hidden=b.dataset.audioMode!=='live';}));
-    $('close-session').addEventListener('click',()=>{if($('close-session').disabled)return;$('close-confirm-summary').textContent=`${fa(clips.length)} فایل، با ترتیب فعلی، آمادهٔ تبدیل است.`;$('close-dialog').showModal();});$('dismiss-close').addEventListener('click',()=>$('close-dialog').close());
-    $('confirm-close').addEventListener('click',async()=>{$('confirm-close').disabled=true;try{await post(`/api/sessions/${jid}/close`);location.href=`/jobs/${jid}`;}catch(e){toast(e.message);$('close-dialog').close();await refresh();}finally{$('confirm-close').disabled=false;}});
-    $('reopen-session').addEventListener('click',async()=>{try{await post(`/api/sessions/${jid}/reopen`);await refresh();}catch(e){toast(e.message);}});
-    $('delete-session').addEventListener('click',()=>{if(uploading||locks.size){toast('ابتدا ضبط یا بارگذاری را تمام کنید.');return;}const d=$('confirm-dialog');d.returnValue='cancel';d.addEventListener('close',async()=>{if(d.returnValue==='delete')try{await api(`/api/jobs/${jid}`,{method:'DELETE'});location.href='/';}catch(e){toast(e.message);}},{once:true});d.showModal();});
-    window.SessionEditor={setBusy(key,value){value?locks.add(key):locks.delete(key);controls();},async saveRecording(file){if(uploading||!isOpen())throw new Error('جلسه در حال بارگذاری است یا بسته شده است.');uploading=true;controls();try{await upload(file);await refresh();$('clip-upload-status').textContent='ضبط به جلسه اضافه شد.';}finally{uploading=false;$('clip-upload-progress').hidden=true;controls();}},isOpen};
-    window.addEventListener('beforeunload',e=>{if(uploading||pending.length||locks.size){e.preventDefault();e.returnValue='';}});refresh();
+
+  /* ═════════════════════════════════════════════════ session ══════════ */
+  if (cfg.page === "session") {
+    const jobId = cfg.jobId;
+    let job = null, timer;
+
+    function isOpen() { return job && job.status === "open"; }
+
+    function paint() {
+      const st = state(job);
+      const statusEl = $("session-status");
+      statusEl.className = `dot ${st}`;
+      statusEl.textContent = LABEL[st] || st;
+
+      const bits = [];
+      if (job.clip_count) bits.push(`${fa(job.clip_count)} فایل صوتی`);
+      if (job.duration_sec) bits.push(`<span dir="ltr">${duration(job.duration_sec)}</span>`);
+      bits.push(job.tier === "accurate" ? "تبدیل دقیق" : "تبدیل سریع");
+      bits.push(esc(date(job.created_at)));
+      $("session-summary").innerHTML = bits.join('<span class="sep">·</span>');
+
+      $("view-transcript").hidden = job.status !== "done";
+      $("close-session").hidden = !isOpen();
+      $("reopen-session").hidden = job.status !== "canceled" && job.status !== "failed";
+      $("composer").hidden = !isOpen();
+      if (!isOpen()) document.querySelector(".doc")?.style.setProperty("padding-bottom", "40px");
+    }
+
+    async function refresh() {
+      clearTimeout(timer);
+      try {
+        const data = await api(`/api/sessions/${jobId}/clips`);
+        job = data.job;
+        paint();
+        renderClips(data.items);
+        const busy = ["queued","running","canceling"].includes(state(job));
+        timer = setTimeout(refresh, busy ? 2500 : 15000);
+      } catch (e) {
+        $("clip-error").textContent = e.message;
+        timer = setTimeout(refresh, 6000);
+      }
+    }
+
+    function renderClips(items) {
+      const sec = $("clip-section");
+      sec.hidden = !items.length;
+      $("clip-list").innerHTML = items.map((c, i) => `
+        <div class="clip" data-id="${esc(c.id)}">
+          <span class="clip-n">${fa(i + 1)}</span>
+          <div class="clip-b"><strong>${esc(c.original_name)}</strong>
+            <span class="tiny dim" dir="ltr">${duration(c.duration_sec)}</span></div>
+          <audio controls preload="none" src="/api/sessions/${jobId}/clips/${c.id}/audio"></audio>
+          ${isOpen() ? `<button class="iconbtn danger js-delclip" aria-label="حذف فایل"><svg><use href="#i-trash"/></svg></button>` : ""}
+        </div>`).join("");
+    }
+
+    $("clip-list")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".js-delclip");
+      if (!btn) return;
+      const id = btn.closest(".clip").dataset.id;
+      try { await api(`/api/sessions/${jobId}/clips/${id}`, { method: "DELETE" }); refresh(); }
+      catch (err) { toast(err.message); }
+    });
+
+    /* ---- upload ------------------------------------------------------- */
+    const input = $("clip-input"), drop = $("clip-dropzone");
+    const wrap = $("upload-status-wrap"), statusEl = $("clip-upload-status");
+    const barWrap = $("clip-upload-progress"), bar = $("clip-upload-bar");
+    let queue = [];
+
+    function setStatus(msg, bad) {
+      wrap.hidden = !msg;
+      statusEl.textContent = msg || "";
+      statusEl.style.color = bad ? "var(--danger)" : "";
+    }
+
+    function upload(file) {
+      return new Promise((resolve, reject) => {
+        const fd = new FormData(); fd.append("file", file);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `/api/sessions/${jobId}/clips`);
+        xhr.setRequestHeader("X-CSRF-Token", V.csrf());
+        barWrap.hidden = false;
+        xhr.upload.addEventListener("progress", (ev) => {
+          if (ev.lengthComputable) bar.style.width = (ev.loaded / ev.total) * 100 + "%";
+        });
+        xhr.addEventListener("load", () => {
+          bar.style.width = "0"; barWrap.hidden = true;
+          if (xhr.status === 201) return resolve();
+          let m = `خطا ${xhr.status}`;
+          try { m = JSON.parse(xhr.responseText).detail || m; } catch (_) {}
+          reject(new Error(m));
+        });
+        xhr.addEventListener("error", () => { barWrap.hidden = true; reject(new Error("ارتباط قطع شد")); });
+        xhr.send(fd);
+      });
+    }
+
+    async function runQueue() {
+      $("retry-uploads").hidden = true;
+      $("discard-uploads").hidden = true;
+      while (queue.length) {
+        const file = queue[0];
+        const max = (cfg.maxMb || 500) * 1024 * 1024;
+        if (file.size > max) {
+          setStatus(`«${file.name}» بزرگ‌تر از حد مجاز است`, true);
+          queue.shift(); continue;
+        }
+        setStatus(`در حال افزودن «${file.name}»…`);
+        try {
+          await upload(file);
+          queue.shift();
+        } catch (e) {
+          setStatus(e.message, true);
+          $("retry-uploads").hidden = false;
+          $("discard-uploads").hidden = false;
+          return;
+        }
+        refresh();
+        window.VazheLive?.reload?.();
+      }
+      setStatus("");
+    }
+
+    input?.addEventListener("change", () => {
+      queue = queue.concat([...input.files]);
+      input.value = "";
+      runQueue();
+    });
+    $("retry-uploads")?.addEventListener("click", runQueue);
+    $("discard-uploads")?.addEventListener("click", () => { queue = []; setStatus(""); 
+      $("retry-uploads").hidden = true; $("discard-uploads").hidden = true; });
+
+    ["dragenter","dragover"].forEach((ev) => document.addEventListener(ev, (e) => {
+      if (!isOpen()) return; e.preventDefault(); drop?.classList.add("dragover"); }));
+    ["dragleave","drop"].forEach((ev) => document.addEventListener(ev, (e) => {
+      e.preventDefault(); drop?.classList.remove("dragover"); }));
+    document.addEventListener("drop", (e) => {
+      if (!isOpen() || !e.dataTransfer?.files?.length) return;
+      queue = queue.concat([...e.dataTransfer.files]); runQueue();
+    });
+
+    /* ---- close / reopen / delete -------------------------------------- */
+    const closeDlg = $("close-dialog");
+    $("close-session")?.addEventListener("click", () => {
+      $("close-confirm-summary").textContent =
+        job.clip_count ? `${fa(job.clip_count)} فایل صوتی به یک متن پیوسته تبدیل می‌شود.`
+                       : "متن زنده به‌عنوان متن نهایی ذخیره می‌شود.";
+      closeDlg.showModal();
+    });
+    $("dismiss-close")?.addEventListener("click", () => closeDlg.close());
+    $("confirm-close")?.addEventListener("click", async () => {
+      $("confirm-close").disabled = true;
+      try { await api(`/api/sessions/${jobId}/close`, { method: "POST" }); location.href = `/jobs/${jobId}`; }
+      catch (e) { toast(e.message); $("confirm-close").disabled = false; closeDlg.close(); }
+    });
+    $("reopen-session")?.addEventListener("click", async () => {
+      try { await api(`/api/sessions/${jobId}/reopen`, { method: "POST" }); refresh(); }
+      catch (e) { toast(e.message); }
+    });
+    $("delete-session")?.addEventListener("click", () => {
+      const d = $("confirm-dialog");
+      d.showModal();
+      d.addEventListener("close", async function once() {
+        d.removeEventListener("close", once);
+        if (d.returnValue !== "delete") return;
+        try { await api(`/api/jobs/${jobId}`, { method: "DELETE" }); location.href = "/"; }
+        catch (e) { toast(e.message); }
+      });
+    });
+
+    refresh();
   }
 })();

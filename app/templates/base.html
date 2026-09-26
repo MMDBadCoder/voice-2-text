@@ -2,73 +2,99 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ request.state.login_session.csrf_token if request.state.login_session else '' }}">
-  <meta name="theme-color" content="#fafbf9">
+  <meta name="theme-color" content="#08090a">
   <title>{% block page_title %}{{ title }}{% endblock %}</title>
   <link rel="preload" href="/static/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/app.css?v=5">
+  <link rel="stylesheet" href="/static/app.css?v=8">
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 </head>
 <body>
-  <a href="#main" class="skip-link">رفتن به محتوای اصلی</a>
+<a href="#main" class="skip-link">رفتن به محتوا</a>
+{% include "_icons.html" %}
 
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></symbol>
-    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
-    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></symbol>
-    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12m-4-4 4 4 4-4M5 19h14"/></symbol>
-    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
-    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h9"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></symbol>
-    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/></symbol>
-  </defs></svg>
-
-  <header class="site-header"><div class="wrap header-inner">
-    <a class="brand" href="/" aria-label="{{ title }}">
-      <img src="/static/mark.svg" width="26" height="26" alt="">
-      <span>واژه<span class="brand-caption">دستیار صوتی جلسات</span></span>
+{% if request.state.user and request.state.user.status == 'approved' %}
+<div class="shell">
+  <aside class="rail" id="rail">
+    <a class="rail-brand" href="/">
+      <img src="/static/mark.svg" width="24" height="24" alt="">
+      <span>واژه<small>دستیار صوتی جلسات</small></span>
     </a>
-    {% if request.state.user %}
-    <nav aria-label="ناوبری اصلی">
-      <a href="/" class="nav-link">جلسه‌ها</a>
-      {% if request.state.user.is_admin %}<a href="/admin" class="nav-link">کاربران</a>{% endif %}
-    </nav>
-    <details class="user-menu">
-      <summary>{{ request.state.user.full_name }} <svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-      <div class="download-options">
-        <a href="/account">حساب و رمز عبور</a>
-        <button id="logout-btn" type="button">خروج</button>
-      </div>
-    </details>
+
+    <button class="btn primary block" id="new-session-btn"><svg><use href="#i-plus"/></svg>جلسهٔ جدید</button>
+
+    <div class="rail-search">
+      <svg><use href="#i-search"/></svg>
+      <input id="session-search" type="search" placeholder="جست‌وجو" aria-label="جست‌وجو در جلسه‌ها">
+    </div>
+
+    <nav class="rail-list" id="rail-list" aria-label="جلسه‌ها"></nav>
+
+    <div class="rail-foot">
+      {% if request.state.user.is_admin %}
+      <a class="rail-item" href="/admin"><svg><use href="#i-users"/></svg><span class="t">کاربران</span></a>
+      {% endif %}
+      <details class="menu">
+        <summary><span class="rail-user"><svg><use href="#i-user"/></svg><span class="t">{{ request.state.user.full_name }}</span><svg><use href="#i-chevron"/></svg></span></summary>
+        <div class="menu-pop up">
+          <a href="/account"><svg><use href="#i-user"/></svg>حساب و رمز عبور</a>
+          <button type="button" id="theme-btn"><svg><use href="#i-sun"/></svg>روشن / تیره</button>
+          <button type="button" id="logout-btn" class="danger"><svg><use href="#i-out"/></svg>خروج</button>
+        </div>
+      </details>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="iconbtn rail-toggle" id="rail-toggle" aria-label="فهرست جلسه‌ها"><svg><use href="#i-menu"/></svg></button>
+      {% block topbar %}<h1>{{ title }}</h1>{% endblock %}
+    </header>
+    {% if stub_mode %}
+    <div class="page page-wide" style="padding-bottom:0"><div class="notice">
+      <strong>حالت آزمایشی</strong> — متن‌ها ساختگی‌اند. <code>ASR_BACKEND=faster_whisper</code> را تنظیم کنید.
+    </div></div>
     {% endif %}
-  </div></header>
+    <main id="main" class="page {% block page_class %}page-wide{% endblock %}">{% block content %}{% endblock %}</main>
+  </div>
+</div>
+{% else %}
+<div class="auth"><div class="auth-box">{% block auth_content %}{% endblock %}</div></div>
+{% endif %}
 
-  {% if stub_mode %}
-  <div class="stub-banner wrap" role="alert"><strong>حالت آزمایشی — متن‌ها ساختگی هستند.</strong> برای تبدیل واقعی <code>ASR_BACKEND=faster_whisper</code> را تنظیم کنید.</div>
-  {% endif %}
+<div id="toast" class="toast" role="status" hidden></div>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog">
+  <h2 id="confirm-title">حذف این جلسه؟</h2>
+  <p>همهٔ صداها و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p>
+  <div class="row"><button class="btn danger-fill" value="delete">حذف</button><button class="btn" value="cancel" autofocus>انصراف</button></div>
+</form></dialog>
 
-  <main class="wrap" id="main">{% block content %}{% endblock %}</main>
+<dialog id="new-session-dialog" aria-labelledby="ns-title"><form id="new-session-form">
+  <h2 id="ns-title">جلسهٔ جدید</h2>
+  <p>یک عنوان بدهید و روش تبدیل را انتخاب کنید.</p>
+  <div style="margin-top:20px">
+    <label class="label" for="session-title">عنوان</label>
+    <input class="field" id="session-title" name="title" maxlength="200" required autofocus
+           placeholder="مثلاً جلسهٔ برنامه‌ریزی هفته">
+  </div>
+  <div class="choices">
+    {% for t in tiers %}
+    <label class="choice">
+      <input type="radio" name="tier" value="{{ t.value }}" {% if t.value == default_tier %}checked{% endif %}>
+      <span><strong>{{ t.label }}</strong><small>{{ t.hint }}</small></span>
+    </label>
+    {% endfor %}
+  </div>
+  <p id="create-error" class="err" role="alert"></p>
+  <div class="row"><button class="btn primary" id="create-session-submit">ساخت جلسه</button>
+    <button class="btn ghost" type="button" id="dismiss-new-session">انصراف</button></div>
+</form></dialog>
 
-  <footer class="site-footer wrap">
-    <span>از گفت‌وگو، به واژه.</span>
-    <span>پردازش محلی · بدون ارسال به سرویس‌های دیگر</span>
-  </footer>
-
-  <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog">
-    <h2 id="confirm-title">حذف این جلسه؟</h2>
-    <p>همهٔ فایل‌های صوتی و متن آن حذف می‌شوند. این کار برگشت‌پذیر نیست.</p>
-    <div class="actions"><button class="btn danger-fill" value="delete">حذف</button><button class="btn" value="cancel" autofocus>انصراف</button></div>
-  </form></dialog>
-
-  {% block scripts %}{% endblock %}
-  <script src="/static/common.js?v=5" defer></script>
-  <script src="/static/app.js?v=5" defer></script>
-  {% block page_scripts %}{% endblock %}
+{% block scripts %}{% endblock %}
+<script src="/static/common.js?v=8" defer></script>
+<script src="/static/shell.js?v=8" defer></script>
+<script src="/static/app.js?v=8" defer></script>
+{% block page_scripts %}{% endblock %}
 </body>
 </html>

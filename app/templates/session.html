@@ -1,120 +1,82 @@
 {% extends "base.html" %}
 {% block page_title %}{{ job.display_title }} — {{ title }}{% endblock %}
+{% block page_class %}page-doc doc{% endblock %}
+{% block topbar %}
+<button class="iconbtn" onclick="location.href='/'" aria-label="بازگشت"><svg><use href="#i-back"/></svg></button>
+<h1>{{ job.display_title }}</h1>
+<span class="dot" id="session-status"></span>
+<span class="spacer"></span>
+<span class="tiny dim" id="transcript-count"></span>
+<button class="iconbtn" id="copy-live" aria-label="کپی متن"><svg><use href="#i-copy"/></svg></button>
+<details class="menu">
+  <summary><span class="iconbtn" aria-label="گزینه‌های بیشتر"><svg><use href="#i-more"/></svg></span></summary>
+  <div class="menu-pop">
+    <a href="/jobs/{{ job.id }}" id="view-transcript" hidden><svg><use href="#i-file"/></svg>متن نهایی</a>
+    <button type="button" id="close-session"><svg><use href="#i-lock"/></svg>بستن جلسه و تولید متن</button>
+    <button type="button" id="reopen-session" hidden><svg><use href="#i-plus"/></svg>باز کردن دوباره</button>
+    <button type="button" id="delete-session" class="danger"><svg><use href="#i-trash"/></svg>حذف جلسه</button>
+  </div>
+</details>
+{% endblock %}
 {% block content %}
-<nav class="crumbs"><a href="/"><svg aria-hidden="true"><use href="#i-back"/></svg>همهٔ جلسه‌ها</a></nav>
-
-<section class="detail-header">
-  <div class="card-head">
-    <h1>{{ job.display_title }}</h1>
-    <span id="session-status" class="status">…</span>
-  </div>
-  <div class="detail-sub">
-    <p class="count" id="session-summary"></p>
-    <div class="actions">
-      <a class="btn small" id="view-transcript" href="/jobs/{{ job.id }}" hidden>متن نهایی</a>
-      <button class="btn small" id="reopen-session" hidden>باز کردن</button>
-      <button class="icon-button danger" id="delete-session" aria-label="حذف جلسه"><svg aria-hidden="true"><use href="#i-trash"/></svg></button>
-    </div>
-  </div>
-</section>
-
-<div class="session-editor">
-  <section class="live-panel" id="transcript-panel">
-    <div class="live-head">
-      <h2>متن جلسه</h2>
-      <div class="actions">
-        <span class="count" id="transcript-count"></span>
-        <button class="icon-button" id="copy-live" aria-label="کپی متن"><svg aria-hidden="true"><use href="#i-copy"/></svg></button>
-      </div>
-    </div>
-    <div class="live-transcript" id="live-transcript" aria-live="polite"></div>
-    <p class="empty" id="transcript-empty">هنوز چیزی گفته نشده. ضبط زنده را شروع کنید یا فایلی بیفزایید.</p>
-  </section>
-
-  <aside class="add-audio-panel" id="add-audio-panel">
-    <div class="auth-tabs" role="group" aria-label="روش افزودن صدا">
-      <button type="button" data-audio-mode="live" aria-pressed="true">ضبط زنده</button>
-      <button type="button" data-audio-mode="upload" aria-pressed="false">فایل</button>
-      <button type="button" data-audio-mode="record" aria-pressed="false">ضبط کامل</button>
-    </div>
-
-    <div id="live-mode">
-      <div class="live-head">
-        <span class="live-state" id="live-state" data-state="idle"><span class="live-dot"></span><span id="live-state-text">آمادهٔ شنیدن</span></span>
-        <span class="count" id="live-latency"></span>
-      </div>
-      <div class="level-meter" id="level-meter" aria-hidden="true"></div>
-      <div class="actions">
-        <button type="button" class="btn primary" id="live-start"><svg aria-hidden="true"><use href="#i-mic"/></svg>شروع</button>
-        <button type="button" class="btn danger-fill" id="live-stop" hidden><svg aria-hidden="true"><use href="#i-stop"/></svg>توقف</button>
-      </div>
-      <p class="field-hint">هر بار که مکث کنید، همان جمله فرستاده و متنش افزوده می‌شود.</p>
-      <p id="live-error" class="inline-error" role="alert"></p>
-    </div>
-
-    <div id="upload-mode" hidden>
-      <label class="dropzone" id="clip-dropzone" for="clip-input">
-        <input type="file" id="clip-input" class="file-input" accept=".{{ allowed|join(',.') }}" multiple>
-        <span class="upload-icon" aria-hidden="true"><svg><use href="#i-upload"/></svg></span>
-        <strong>فایل‌ها را رها کنید</strong>
-        <span class="dz-hint">تا {{ max_upload_mb }} مگابایت</span>
-      </label>
-      <div id="clip-upload-progress" class="progress" role="progressbar" aria-label="بارگذاری" aria-valuemin="0" aria-valuemax="100" hidden><div id="clip-upload-bar" class="bar"></div></div>
-      <p class="upload-status" id="clip-upload-status" role="status"></p>
-      <button class="btn small" id="retry-uploads" hidden>ادامهٔ بارگذاری</button>
-      <button class="text-button" id="discard-uploads" hidden>کنار گذاشتن</button>
-    </div>
-
-    <div id="record-mode" hidden>
-      <div class="recorder-face">
-        <span class="record-indicator" id="record-indicator"></span>
-        <strong class="record-timer" id="record-timer" dir="ltr">۰۰:۰۰</strong>
-        <span class="small muted" id="record-state">آمادهٔ ضبط</span>
-      </div>
-      <div class="actions">
-        <button type="button" class="btn primary" id="record-start">شروع ضبط</button>
-        <button type="button" class="btn danger-fill" id="record-stop" hidden>پایان</button>
-      </div>
-      <p id="record-error" class="inline-error" role="alert"></p>
-      <div id="record-preview" hidden>
-        <audio id="local-audio" controls></audio>
-        <label class="field-label" for="record-name">نام این بخش</label>
-        <input class="text-input" id="record-name" maxlength="100" placeholder="اختیاری">
-        <div class="actions">
-          <button class="btn primary small" id="save-recording">افزودن</button>
-          <a class="btn small" id="download-recording" download="recording.mp3">دریافت</a>
-          <button class="btn small" id="discard-recording">حذف</button>
-        </div>
-      </div>
-    </div>
-  </aside>
+<div class="doc-head">
+  <h1>{{ job.display_title }}</h1>
+  <div class="doc-meta" id="session-summary"></div>
 </div>
 
-<section class="clip-section" style="margin-top:16px">
-  <div class="section-heading"><h2>فایل‌های صوتی</h2><span class="count" id="clip-count"></span></div>
+<p id="live-error" class="notice bad" role="alert" hidden></p>
+
+<div class="blocks" id="live-transcript" aria-live="polite"></div>
+
+<div class="blank" id="transcript-empty">
+  <h3>هنوز چیزی گفته نشده</h3>
+  <p>دکمهٔ میکروفن را بزنید و صحبت کنید — هر بار که مکث کنید، همان جمله نوشته می‌شود.</p>
+</div>
+
+<section id="clip-section" hidden style="margin-top:40px">
+  <h2 style="font-size:15px;color:var(--ink-3);margin-bottom:8px">فایل‌های صوتی</h2>
   <div id="clip-list"></div>
-  <p class="inline-error" id="clip-error" role="alert"></p>
+  <p class="err" id="clip-error" role="alert"></p>
 </section>
 
-<div class="session-close-panel" id="close-panel">
-  <div>
-    <strong>متن نهایی</strong>
-    <p class="muted small">فایل‌های بالا به ترتیب به یک متن پیوسته تبدیل می‌شوند.</p>
+<div class="composer" id="composer">
+  <div class="composer-inner">
+    <button class="mic-btn" id="live-start" aria-label="شروع ضبط زنده"><svg><use href="#i-mic"/></svg></button>
+    <button class="mic-btn on" id="live-stop" hidden aria-label="توقف ضبط"><svg><use href="#i-stop"/></svg></button>
+    <div class="composer-body">
+      <div class="composer-line">
+        <span class="dot" id="live-state" data-state="idle">آمادهٔ شنیدن</span>
+        <span class="tiny dim" id="live-latency"></span>
+      </div>
+      <div class="wave" id="level-meter" aria-hidden="true"></div>
+      <div class="composer-hint">برای شروع، میکروفن را بزنید</div>
+    </div>
+    <label class="iconbtn" id="clip-dropzone" for="clip-input" title="افزودن فایل صوتی">
+      <input type="file" id="clip-input" class="file-input" accept=".{{ allowed|join(',.') }}" multiple>
+      <svg><use href="#i-clip"/></svg>
+    </label>
   </div>
-  <button class="btn primary" id="close-session" disabled>بستن جلسه</button>
+  <div class="composer-inner" id="upload-status-wrap" hidden style="margin-top:8px">
+    <div class="composer-body">
+      <div class="composer-line"><span id="clip-upload-status"></span></div>
+      <div class="bar" id="clip-upload-progress" hidden><i id="clip-upload-bar"></i></div>
+    </div>
+    <button class="btn sm ghost" id="retry-uploads" hidden>ادامه</button>
+    <button class="btn sm ghost" id="discard-uploads" hidden>کنار گذاشتن</button>
+  </div>
 </div>
 
-<dialog id="close-dialog" aria-labelledby="close-dialog-title">
-  <h2 id="close-dialog-title">جلسه بسته شود؟</h2>
+<dialog id="close-dialog" aria-labelledby="cd-title">
+  <h2 id="cd-title">جلسه بسته شود؟</h2>
   <p id="close-confirm-summary"></p>
-  <p>پس از شروع تبدیل، افزودن یا جابه‌جایی فایل‌ها متوقف می‌شود.</p>
-  <div class="actions"><button class="btn primary" id="confirm-close">شروع</button><button class="btn" id="dismiss-close">انصراف</button></div>
+  <p>پس از شروع تبدیل، افزودن صدا متوقف می‌شود.</p>
+  <div class="row"><button class="btn primary" id="confirm-close">شروع</button>
+    <button class="btn ghost" id="dismiss-close">انصراف</button></div>
 </dialog>
 {% endblock %}
-{% block scripts %}<script>window.APP = {page: "session", jobId: {{ job.id|tojson }}, maxMb: {{ max_upload_mb }}};</script>{% endblock %}
+{% block scripts %}<script>window.APP = {page:"session", jobId: {{ job.id|tojson }}, maxMb: {{ max_upload_mb }}};</script>{% endblock %}
 {% block page_scripts %}
-<script src="/static/sessions.js?v=5" defer></script>
-<script src="/static/recorder.js?v=5" defer></script>
-<script src="/static/live.js?v=1" defer></script>
-<script src="/static/live-ui.js?v=1" defer></script>
+<script src="/static/sessions.js?v=8" defer></script>
+<script src="/static/live.js?v=8" defer></script>
+<script src="/static/live-ui.js?v=8" defer></script>
 {% endblock %}

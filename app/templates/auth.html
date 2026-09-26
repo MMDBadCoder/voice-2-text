@@ -1,32 +1,67 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="auth-layout">
-  <section class="auth-intro"><p class="eyebrow">واژه، فضای شخصی گفت‌وگوهای شما</p><h1>صداهای پراکنده،<br>یک روایت روشن.</h1><p class="muted">برای جلسه‌هایتان یک فضای خصوصی بسازید. صداها را جمع کنید و هر وقت آماده بودید، به متن تبدیل کنید.</p><ol class="intro-steps"><li><span>۰۱</span>یک جلسه باز کنید</li><li><span>۰۲</span>فایل اضافه کنید یا صدایتان را ضبط کنید</li><li><span>۰۳</span>جلسه را ببندید و متن را بخوانید</li></ol></section>
-  <section class="auth-card" data-mode="{{ mode }}" id="auth-card">
-    <p class="eyebrow">حساب کاربری واژه</p>
-    <h2>{{ 'خوش آمدید' if mode == 'login' else 'شروع یک فضای تازه' if mode == 'signup' else 'بازیابی رمز عبور' }}</h2>
-    <p class="muted small">{{ 'برای ادامه وارد حساب خود شوید.' if mode == 'login' else 'بعد از تأیید شماره، منتظر تأیید مدیر می‌مانید.' if mode == 'signup' else 'کد بازیابی را از طریق بله دریافت کنید.' }}</p>
-    {% if mode == 'login' %}<div class="auth-tabs" role="group" aria-label="روش ورود"><button type="button" data-method="password" aria-pressed="true">با رمز عبور</button><button type="button" data-method="bale" aria-pressed="false">با کد بله</button></div>{% endif %}
-    <form id="credentials-form">
-      {% if mode == 'signup' %}<label for="full-name" class="field-label">نام و نام خانوادگی</label><input id="full-name" class="text-input" name="full_name" autocomplete="name" minlength="2" maxlength="120" required>{% endif %}
-      <label for="phone" class="field-label">شمارهٔ همراه</label><input id="phone" class="text-input phone-input" name="phone" dir="ltr" type="tel" inputmode="numeric" placeholder="09xxxxxxxxx" minlength="11" maxlength="11" autocomplete="tel-national" required>
-      <p class="field-hint">۱۱ رقم، با شروع ۰۹ · شمارهٔ متصل به حساب بلهٔ شما</p>
-      {% if mode != 'reset' %}<div id="password-field"><label for="password" class="field-label">رمز عبور</label><input id="password" class="text-input" type="password" name="password" minlength="8" maxlength="128" autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required></div>{% endif %}
-      {% if mode == 'login' %}<a href="/forgot-password" class="inline-link">رمز عبور را فراموش کرده‌ام</a>{% endif %}
-      <button class="btn primary full-width" id="auth-submit">{{ 'ورود به حساب' if mode == 'login' else 'دریافت کد در بله' }}</button>
-    </form>
-    <form id="verification-form" hidden>
-      <div class="bale-instructions"><strong id="delivery-label">شمارهٔ خود را در بله تأیید کنید</strong><p>بازوی واژه را باز کنید، «شروع» را بزنید و شمارهٔ خودتان را با دکمهٔ اشتراک شماره ارسال کنید. سپس کد را اینجا وارد کنید.</p><a class="btn full-width" id="bale-link" target="_blank" rel="noopener noreferrer">باز کردن واژه در بله ↗</a><details><summary>اگر لینک درخواست را باز نکرد</summary><p>این فرمان را در گفت‌وگوی بازو ارسال کنید:</p><code id="bale-command" dir="ltr"></code></details></div>
-      <label class="field-label" for="verification-code">کد شش‌رقمی</label><input id="verification-code" class="text-input otp-input" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" minlength="6" dir="ltr" required>
-      {% if mode == 'reset' %}<label class="field-label" for="new-password">رمز عبور جدید</label><input id="new-password" class="text-input" type="password" name="password" minlength="8" maxlength="128" autocomplete="new-password" required>{% endif %}
-      <p class="field-hint" id="code-expiry" aria-live="off"></p>
-      <button class="btn primary full-width" id="verify-submit">{{ 'تأیید و ثبت‌نام' if mode == 'signup' else 'ثبت رمز جدید' if mode == 'reset' else 'تأیید و ورود' }}</button>
-      <button type="button" id="resend-code" class="btn full-width" disabled>درخواست کد دوباره</button>
-      <button type="button" class="text-button" id="back-to-phone">اصلاح شماره همراه</button>
-    </form>
-    <p id="auth-error" class="inline-error" role="alert" hidden></p>
-    <div class="auth-switch">{% if mode == 'signup' %}حساب دارید؟ <a href="/login">ورود</a>{% else %}هنوز حساب ندارید؟ <a href="/signup">ساخت حساب</a>{% endif %}</div>
-  </section>
+{% block auth_content %}
+<a class="rail-brand" href="/" style="justify-content:center;margin-bottom:24px">
+  <img src="/static/mark.svg" width="26" height="26" alt=""><span>واژه<small>دستیار صوتی جلسات</small></span>
+</a>
+<div class="panel" data-mode="{{ mode }}" id="auth-card">
+  <h2>{{ 'خوش آمدید' if mode == 'login' else 'شروع یک فضای تازه' if mode == 'signup' else 'بازیابی رمز عبور' }}</h2>
+  <p class="small muted" style="margin-top:6px">{{ 'برای ادامه وارد حساب خود شوید.' if mode == 'login' else 'بعد از تأیید شماره، منتظر تأیید مدیر می‌مانید.' if mode == 'signup' else 'کد بازیابی را از طریق بله دریافت کنید.' }}</p>
+
+  {% if mode == 'login' %}
+  <div class="segmented" role="group" aria-label="روش ورود" style="margin-top:18px">
+    <button type="button" data-method="password" aria-pressed="true">رمز عبور</button>
+    <button type="button" data-method="bale" aria-pressed="false">کد بله</button>
+  </div>
+  {% endif %}
+
+  <form id="credentials-form" style="margin-top:18px">
+    {% if mode == 'signup' %}
+    <label for="full-name" class="label">نام و نام خانوادگی</label>
+    <input id="full-name" class="field" name="full_name" autocomplete="name" minlength="2" maxlength="120" required style="margin-bottom:14px">
+    {% endif %}
+    <label for="phone" class="label">شمارهٔ همراه</label>
+    <input id="phone" class="field phone-input" name="phone" dir="ltr" type="tel" inputmode="numeric"
+           placeholder="09xxxxxxxxx" minlength="11" maxlength="11" autocomplete="tel-national" required>
+    <p class="hint">۱۱ رقم، با شروع ۰۹ · شمارهٔ متصل به حساب بلهٔ شما</p>
+    {% if mode != 'reset' %}
+    <div id="password-field" style="margin-top:14px">
+      <label for="password" class="label">رمز عبور</label>
+      <input id="password" class="field" type="password" name="password" minlength="8" maxlength="128"
+             autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required>
+    </div>
+    {% endif %}
+    {% if mode == 'login' %}<a href="/forgot-password" class="small muted" style="display:inline-block;margin-top:12px">رمز عبور را فراموش کرده‌ام</a>{% endif %}
+    <button class="btn primary block" id="auth-submit" style="margin-top:18px">{{ 'ورود به حساب' if mode == 'login' else 'دریافت کد در بله' }}</button>
+  </form>
+
+  <form id="verification-form" hidden style="margin-top:18px">
+    <div class="notice">
+      <strong id="delivery-label">شمارهٔ خود را در بله تأیید کنید</strong>
+      <p class="small" style="margin-top:4px">بازوی واژه را باز کنید، «شروع» را بزنید و شمارهٔ خودتان را با دکمهٔ اشتراک شماره ارسال کنید.</p>
+      <a class="btn block" id="bale-link" target="_blank" rel="noopener noreferrer" style="margin-top:12px">باز کردن واژه در بله</a>
+      <details style="margin-top:10px"><summary class="small muted">اگر لینک درخواست را باز نکرد</summary>
+        <p class="small" style="margin-top:6px">این فرمان را در گفت‌وگوی بازو ارسال کنید:</p>
+        <code id="bale-command" dir="ltr"></code></details>
+    </div>
+    <label class="label" for="verification-code" style="margin-top:16px">کد شش‌رقمی</label>
+    <input id="verification-code" class="field otp-input" name="code" autocomplete="one-time-code"
+           inputmode="numeric" maxlength="6" minlength="6" dir="ltr" required>
+    {% if mode == 'reset' %}
+    <label class="label" for="new-password" style="margin-top:14px">رمز عبور جدید</label>
+    <input id="new-password" class="field" type="password" name="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+    {% endif %}
+    <p class="hint" id="code-expiry" aria-live="off"></p>
+    <button class="btn primary block" id="verify-submit" style="margin-top:16px">{{ 'تأیید و ثبت‌نام' if mode == 'signup' else 'ثبت رمز جدید' if mode == 'reset' else 'تأیید و ورود' }}</button>
+    <button type="button" id="resend-code" class="btn block" disabled style="margin-top:8px">درخواست کد دوباره</button>
+    <button type="button" class="btn ghost block" id="back-to-phone" style="margin-top:4px">اصلاح شماره همراه</button>
+  </form>
+
+  <p id="auth-error" class="err" role="alert" hidden style="margin-top:12px"></p>
+  <p class="small muted" style="margin-top:18px;text-align:center">
+    {% if mode == 'signup' %}حساب دارید؟ <a href="/login" style="color:var(--accent)">ورود</a>
+    {% else %}هنوز حساب ندارید؟ <a href="/signup" style="color:var(--accent)">ساخت حساب</a>{% endif %}
+  </p>
 </div>
+<p class="tiny dim" style="text-align:center;margin-top:20px">پردازش کاملاً محلی — صدای شما جایی نمی‌رود.</p>
 {% endblock %}
-{% block page_scripts %}<script src="/static/accounts.js?v=3" defer></script>{% endblock %}
+{% block page_scripts %}<script src="/static/accounts.js?v=8" defer></script>{% endblock %}

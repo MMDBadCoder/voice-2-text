@@ -64,7 +64,8 @@ class LiveEngine:
                 cpu_threads=config.LIVE_CPU_THREADS, num_workers=1, local_files_only=True,
             )
             log.info("live: model ready in %.1fs", time.monotonic() - started)
-            return self._model
+            self._models[tier] = model
+            return model
 
     def warm(self, tier: str | None = None) -> None:
         if config.LIVE_ENABLED and config.ASR_BACKEND == "faster_whisper":

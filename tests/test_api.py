@@ -172,9 +172,9 @@ def test_stub_mode_shows_warning_banner(client):
     """Fake transcripts must never be mistakable for real ones. conftest runs
     the whole suite with ASR_BACKEND=stub, so the banner must be present."""
     html = client.get("/").text
-    assert "stub-banner" in html
-    assert "ساختگی" in html                      # "fabricated"
-    assert "ASR_BACKEND=faster_whisper" in html  # tells the reader how to fix it
+    assert "حالت آزمایشی" in html                 # names the mode
+    assert "ساختگی" in html                       # "fabricated"
+    assert "ASR_BACKEND=faster_whisper" in html   # tells the reader how to fix it
 
 
 def test_no_banner_when_backend_is_real(client, monkeypatch):
@@ -182,7 +182,7 @@ def test_no_banner_when_backend_is_real(client, monkeypatch):
 
     monkeypatch.setattr(config, "ASR_BACKEND", "faster_whisper")
     monkeypatch.setattr(main.config, "ASR_BACKEND", "faster_whisper")
-    assert "stub-banner" not in client.get("/").text
+    assert "حالت آزمایشی" not in client.get("/").text
 
 
 def test_segments_endpoint_flags_stub_output(client, monkeypatch):

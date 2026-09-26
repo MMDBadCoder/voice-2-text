@@ -1,3 +1,21 @@
 {% extends "base.html" %}
-{% block content %}<div class="page-heading"><div><p class="eyebrow">مدیریت واژه</p><h1>آدم‌ها، پیش از جلسه‌ها.</h1><p class="muted">درخواست‌های عضویت را بررسی کنید و دسترسی کاربران را مدیریت کنید.</p></div><span id="user-count" class="count"></span></div><section class="admin-panel"><div class="admin-tools"><label class="search-box"><input id="user-search" type="search" placeholder="جست‌وجوی نام یا شماره همراه" aria-label="جست‌وجوی کاربران"></label><select id="user-filter" class="text-input" aria-label="وضعیت حساب"><option value="pending">در انتظار تأیید</option><option value="approved">فعال</option><option value="suspended">متوقف‌شده</option><option value="">همهٔ کاربران</option></select></div><div id="admin-users" aria-live="polite"><p class="empty">در حال دریافت کاربران…</p></div><p id="admin-error" class="inline-error" role="alert"></p><button id="admin-more" class="btn load-more" hidden>صفحهٔ بعد</button></section>{% endblock %}
-{% block page_scripts %}<script src="/static/accounts.js?v=3" defer></script>{% endblock %}
+{% block topbar %}<h1>کاربران</h1><span class="spacer"></span><span class="tiny dim" id="user-count"></span>{% endblock %}
+{% block content %}
+<div class="hero"><h1>آدم‌ها، پیش از جلسه‌ها.</h1><p>درخواست‌های عضویت را بررسی کنید و دسترسی‌ها را مدیریت کنید.</p></div>
+<div class="row" style="margin-bottom:18px">
+  <div class="rail-search" style="flex:1;max-width:320px">
+    <svg><use href="#i-search"/></svg>
+    <input id="user-search" type="search" placeholder="نام یا شمارهٔ همراه" aria-label="جست‌وجوی کاربران">
+  </div>
+  <select id="user-filter" class="field" style="width:auto" aria-label="وضعیت حساب">
+    <option value="pending">در انتظار تأیید</option>
+    <option value="approved">فعال</option>
+    <option value="suspended">متوقف‌شده</option>
+    <option value="">همه</option>
+  </select>
+</div>
+<div class="panel"><div id="admin-users" aria-live="polite"><p class="blank">در حال دریافت…</p></div>
+<p id="admin-error" class="err" role="alert"></p>
+<button id="admin-more" class="btn sm" hidden style="margin-top:14px">صفحهٔ بعد</button></div>
+{% endblock %}
+{% block page_scripts %}<script src="/static/accounts.js?v=8" defer></script>{% endblock %}

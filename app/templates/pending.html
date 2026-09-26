@@ -1,3 +1,14 @@
 {% extends "base.html" %}
-{% block content %}<section class="waiting-card"><div class="waiting-mark" aria-hidden="true">◷</div><p class="eyebrow">{{ request.state.user.full_name }}، خوش آمدید</p><h1 id="approval-title">{{ 'حساب شما در انتظار تأیید است' if request.state.user.status == 'pending' else 'دسترسی حساب متوقف شده است' }}</h1><p class="muted">{{ 'شمارهٔ شما تأیید شده است. پس از تأیید مدیر، فضای جلسه‌های شما آماده می‌شود.' if request.state.user.status == 'pending' else 'برای فعال شدن دوبارهٔ حساب با مدیر سامانه تماس بگیرید.' }}</p><div class="approval-path"><span class="complete">شماره تأیید شد</span><span>بررسی مدیر</span><span>ورود به فضای شخصی</span></div><button class="btn primary" id="approval-refresh">بررسی وضعیت حساب</button><p id="approval-message" class="small muted" role="status"></p></section>{% endblock %}
-{% block page_scripts %}<script src="/static/accounts.js?v=3" defer></script>{% endblock %}
+{% block auth_content %}
+<a class="rail-brand" href="/"><img src="/static/mark.svg" width="24" height="24" alt=""><span>واژه<small>دستیار صوتی جلسات</small></span></a>
+<div class="panel">
+  <h2 id="approval-title">{{ 'حساب شما در انتظار تأیید است' if request.state.user.status == 'pending' else 'دسترسی حساب متوقف شده است' }}</h2>
+  <p class="small muted" style="margin-top:8px">{{ 'شمارهٔ شما تأیید شده است. پس از تأیید مدیر، فضای جلسه‌های شما آماده می‌شود.' if request.state.user.status == 'pending' else 'برای فعال شدن دوبارهٔ حساب با مدیر سامانه تماس بگیرید.' }}</p>
+  <div class="row" style="margin-top:20px">
+    <button class="btn primary" id="approval-refresh">بررسی وضعیت</button>
+    <button class="btn ghost" id="logout-btn">خروج</button>
+  </div>
+  <p id="approval-message" class="tiny dim" role="status" style="margin-top:10px"></p>
+</div>
+{% endblock %}
+{% block page_scripts %}<script src="/static/accounts.js?v=8" defer></script>{% endblock %}
