@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import (__version__, accounts, auth, config, db, exporters, live,
                queue as qmod, results, sessions, storage)
-from .db import AudioClip, Job, JobStatus, SessionLocal
+from .db import AudioClip, Job, JobStatus, LiveBlock, SessionLocal
 
 log = logging.getLogger(__name__)
 BASE = Path(__file__).resolve().parent
@@ -299,6 +299,7 @@ async def delete_job(job_id: str, request: Request):
         rq_job_id = job.rq_job_id
         was_running = job.status == JobStatus.RUNNING
         qmod.request_cancel(job_id)
+        session.query(LiveBlock).filter_by(job_id=job_id).delete()
         for clip in session.query(AudioClip).filter_by(job_id=job_id).all():
             storage.audio_path(clip.stored_name).unlink(missing_ok=True)
             session.delete(clip)

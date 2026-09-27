@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from . import auth, config, db, live, media, queue as qmod, results, storage
-from .db import AudioClip, Job, JobStatus, SessionLocal
+from .db import AudioClip, Job, JobStatus, LiveBlock, SessionLocal, next_block_seq, utcnow
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ def list_clips(job_id: str, request: Request):
     with SessionLocal() as s:
         job = auth.owned_job(s, request, job_id)
         clips = s.query(AudioClip).filter_by(job_id=job.id).order_by(AudioClip.position).all()
-        return {"job": job.to_dict(), "items": [c.to_dict() for c in clips],
+        return {"job": {**job.to_dict(), "clip_count": len(clips)}, "items": [c.to_dict() for c in clips],
                 "max_files": config.MAX_SESSION_FILES, "max_total_mb": config.MAX_SESSION_MB}
 
 
@@ -64,6 +64,7 @@ async def append_clip(job_id: str, request: Request, file: UploadFile):
         editable(s, request, job_id)
     cid = storage.new_job_id()
     name = None
+    committed = False
     try:
         name, size = await storage.save_upload(file, cid)
         duration = await run_in_threadpool(media.probe_duration, storage.audio_path(name))
@@ -81,20 +82,26 @@ async def append_clip(job_id: str, request: Request, file: UploadFile):
                              stored_name=name, size_bytes=size, duration_sec=duration,
                              position=max([c.position for c in clips], default=0)+1)
             s.add(clip)
+            s.add(LiveBlock(job_id=job_id, seq=next_block_seq(s, job_id), source="file",
+                            state="pending", text="", label=clip.original_name[:200], clip_id=cid))
             job.size_bytes = (job.size_bytes or 0) + size
             job.duration_sec = (job.duration_sec or 0) + duration
             s.commit()
+            committed = True
             payload = clip.to_dict()
 
-        # Reserve the transcript slot now, so the block sits where the user
-        # dropped the file rather than wherever the queue happens to finish.
-        live.append_pending_file_block(job_id, cid, payload["original_name"])
-        qmod.enqueue_clip(job_id, cid)
+        try:
+            queued = qmod.enqueue_clip(job_id, cid)
+        except Exception:
+            queued = None
+        if not queued:
+            live.resolve_file_block(job_id, cid, "صف در دسترس نیست؛ تبدیل را دوباره امتحان کنید", 0, failed=True)
+        payload["transcription_queued"] = bool(queued)
         return payload
     except storage.UploadError as exc:
         raise HTTPException(400, str(exc)) from exc
     except BaseException:
-        if name:
+        if name and not committed:
             storage.audio_path(name).unlink(missing_ok=True)
         raise
 
@@ -123,6 +130,7 @@ def remove_clip(job_id: str, clip_id: str, request: Request):
         path = storage.audio_path(clip.stored_name)
         job.size_bytes = max(0, (job.size_bytes or 0)-clip.size_bytes)
         job.duration_sec = max(0, (job.duration_sec or 0)-(clip.duration_sec or 0))
+        s.query(LiveBlock).filter_by(job_id=job_id, clip_id=clip_id).delete()
         s.delete(clip)
         s.commit()
     path.unlink(missing_ok=True)
@@ -140,6 +148,10 @@ def reorder(job_id: str, body: ClipOrder, request: Request):
         positions = {cid: i+1 for i,cid in enumerate(body.clip_ids)}
         for clip in clips:
             clip.position = positions[clip.id]
+        blocks = s.query(LiveBlock).filter_by(job_id=job_id, source="file").order_by(LiveBlock.seq).all()
+        slots = sorted(b.seq for b in blocks)
+        for slot, block in zip(slots, sorted(blocks, key=lambda b: positions.get(b.clip_id, 0))):
+            block.seq = slot
         s.commit()
     return {"ok": True}
 
@@ -151,7 +163,24 @@ def close_session(job_id: str, request: Request):
         job = editable(s, request, job_id)
         clips = s.query(AudioClip).filter_by(job_id=job_id).all()
         if not clips:
-            raise HTTPException(400, "حداقل یک فایل صوتی به جلسه اضافه کنید")
+            blocks = s.query(LiveBlock).filter_by(job_id=job_id, state="done").order_by(LiveBlock.seq).all()
+            if not blocks:
+                raise HTTPException(400, "ابتدا صدا اضافه کنید یا صحبت کنید")
+            from .asr import Segment, TranscriptionResult
+            elapsed = 0.0
+            segments = []
+            for block in blocks:
+                end = elapsed + block.duration_ms / 1000
+                segments.append(Segment(start=elapsed, end=end, text=block.text))
+                elapsed = end
+            results.save(job_id, TranscriptionResult(segments=segments, duration=elapsed,
+                         language=config.LANGUAGE, backend="live"), {"job_id": job_id, "original_name": job.title})
+            job.status, job.stage, job.progress = JobStatus.DONE, "done", 1
+            job.finished_at, job.audio_deleted = utcnow(), 1
+            job.duration_sec, job.num_segments = elapsed, len(segments)
+            job.text_chars = sum(len(b.text or "") for b in blocks)
+            s.commit()
+            return job.to_dict()
         if any(not storage.audio_path(c.stored_name).exists() for c in clips):
             raise HTTPException(409, "یکی از فایل‌های صوتی موجود نیست")
         job.status = JobStatus.QUEUED
@@ -191,3 +220,26 @@ def reopen(job_id: str, request: Request):
         storage.audio_path(job.stored_name).unlink(missing_ok=True)
         s.commit()
         return job.to_dict()
+
+
+@router.post("/api/sessions/{job_id}/clips/{clip_id}/retry")
+def retry_clip(job_id: str, clip_id: str, request: Request):
+    with SessionLocal() as s:
+        db.write_lock(s)
+        editable(s, request, job_id)
+        clip = s.query(AudioClip).filter_by(id=clip_id, job_id=job_id).first()
+        block = s.query(LiveBlock).filter_by(job_id=job_id, clip_id=clip_id).first()
+        if not clip or not block:
+            raise HTTPException(404, "فایل یافت نشد")
+        if block.state != "failed":
+            raise HTTPException(409, "فایل در حال تبدیل است یا آماده شده است")
+        block.state, block.text = "pending", ""
+        s.commit()
+    try:
+        queued = qmod.enqueue_clip(job_id, clip_id)
+    except Exception:
+        queued = None
+    if not queued:
+        live.resolve_file_block(job_id, clip_id, "صف در دسترس نیست", 0, failed=True)
+        raise HTTPException(503, "صف در دسترس نیست")
+    return {"queued": True}

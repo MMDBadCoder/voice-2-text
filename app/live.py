@@ -109,6 +109,10 @@ def _append_block(job_id: str, text: str, *, source: str, duration_ms: int,
                   state: str = "done", label: str | None = None,
                   clip_id: str | None = None) -> dict:
     with SessionLocal() as s:
+        db.write_lock(s)
+        job = s.get(Job, job_id)
+        if job is None or job.status != JobStatus.OPEN:
+            return None
         block = LiveBlock(job_id=job_id, seq=next_block_seq(s, job_id), source=source,
                           state=state, text=text, duration_ms=duration_ms,
                           label=label, clip_id=clip_id)
@@ -131,6 +135,8 @@ def resolve_file_block(job_id: str, clip_id: str, text: str, duration_ms: int,
                  .filter(LiveBlock.job_id == job_id, LiveBlock.clip_id == clip_id)
                  .first())
         if block is None:
+            return
+        if block.edited:
             return
         block.text = text
         block.state = "failed" if failed else "done"
@@ -164,17 +170,23 @@ def get_transcript(job_id: str, request: Request):
                   .order_by(LiveBlock.seq).all())
         return {"items": [b.to_dict() for b in blocks],
                 "live_enabled": config.LIVE_ENABLED,
+                "editable": job.status == JobStatus.OPEN,
                 "chars": sum(len(b.text or "") for b in blocks)}
 
 
 @router.patch("/api/sessions/{job_id}/transcript/{block_id}")
 def edit_block(job_id: str, block_id: str, body: BlockEdit, request: Request):
     with SessionLocal() as s:
-        auth.owned_job(s, request, job_id)
+        db.write_lock(s)
+        job = auth.owned_job(s, request, job_id)
+        if job.status != JobStatus.OPEN:
+            raise HTTPException(409, "جلسه بسته شده است")
         block = s.query(LiveBlock).filter(LiveBlock.id == block_id,
                                           LiveBlock.job_id == job_id).first()
         if block is None:
             raise HTTPException(404, "این بخش یافت نشد")
+        if block.state != "done":
+            raise HTTPException(409, "ابتدا منتظر پایان تبدیل بمانید")
         block.text = body.text.strip()
         block.edited = 1
         s.commit()
@@ -184,7 +196,10 @@ def edit_block(job_id: str, block_id: str, body: BlockEdit, request: Request):
 @router.delete("/api/sessions/{job_id}/transcript/{block_id}")
 def delete_block(job_id: str, block_id: str, request: Request):
     with SessionLocal() as s:
-        auth.owned_job(s, request, job_id)
+        db.write_lock(s)
+        job = auth.owned_job(s, request, job_id)
+        if job.status != JobStatus.OPEN:
+            raise HTTPException(409, "جلسه بسته شده است")
         block = s.query(LiveBlock).filter(LiveBlock.id == block_id,
                                           LiveBlock.job_id == job_id).first()
         if block is None:
@@ -206,6 +221,10 @@ async def live_socket(ws: WebSocket, job_id: str):
     if not config.LIVE_ENABLED:
         return await _reject(ws, 1011, "رونویسی زنده در این سرور فعال نیست")
 
+    origin = ws.headers.get("origin")
+    expected = config.PUBLIC_BASE_URL or str(ws.url.replace(scheme="https" if ws.url.scheme == "wss" else "http", path="", query=""))
+    if origin and origin.rstrip("/") != expected.rstrip("/"):
+        return await _reject(ws, 1008, "مبدأ اتصال معتبر نیست")
     user, _ = auth.lookup_session(ws.cookies.get(auth.COOKIE))
     if not user or user.get("status") != "approved":
         return await _reject(ws, 1008, "ابتدا وارد حساب خود شوید")
@@ -236,10 +255,18 @@ async def live_socket(ws: WebSocket, job_id: str):
                 if len(payload) < 4:
                     continue
                 (client_seq,) = struct.unpack_from("<I", payload, 0)
+                current, _ = await asyncio.to_thread(auth.lookup_session, ws.cookies.get(auth.COOKIE))
+                with SessionLocal() as s:
+                    active = s.get(Job, job_id)
+                    allowed = current and current.get("status") == "approved" and active and active.owner_id == current["id"] and active.status == JobStatus.OPEN
+                if not allowed:
+                    await ws.send_json({"type": "error", "fatal": True, "message": "جلسه یا دسترسی شما بسته شده است"})
+                    break
                 pcm = payload[4:]
                 cap = SAMPLE_RATE * 2 * MAX_UTTERANCE_SEC
-                if len(pcm) > cap:
-                    pcm = pcm[:cap]
+                if len(pcm) > cap or len(pcm) % 2:
+                    await ws.send_json({"type": "error", "client_seq": client_seq, "message": "قالب یا طول صوت نامعتبر است"})
+                    continue
                 duration_ms = int(len(pcm) / 2 / SAMPLE_RATE * 1000)
 
                 if inflight >= config.LIVE_MAX_QUEUED:
@@ -271,9 +298,16 @@ async def live_socket(ws: WebSocket, job_id: str):
                         {"type": "empty", "client_seq": client_seq, "latency_ms": elapsed_ms}))
                     continue
 
+                current, _ = await asyncio.to_thread(auth.lookup_session, ws.cookies.get(auth.COOKIE))
+                if not current or current.get("status") != "approved":
+                    await ws.send_json({"type": "error", "fatal": True, "message": "دسترسی شما پایان یافته است"})
+                    break
                 block = await loop.run_in_executor(
                     None, lambda: _append_block(job_id, text, source="mic",
                                                 duration_ms=duration_ms))
+                if block is None:
+                    await ws.send_json({"type": "error", "client_seq": client_seq, "message": "جلسه پیش از ذخیره بسته شد"})
+                    continue
                 await ws.send_text(json.dumps(
                     {"type": "block", "client_seq": client_seq,
                      "latency_ms": elapsed_ms, "block": block}))
@@ -283,6 +317,9 @@ async def live_socket(ws: WebSocket, job_id: str):
                     data = json.loads(text_msg)
                 except ValueError:
                     continue
+                if data.get("type") == "finish":
+                    await ws.send_json({"type": "finished"})
+                    break
                 if data.get("type") == "ping":
                     await ws.send_text(json.dumps({"type": "pong"}))
 

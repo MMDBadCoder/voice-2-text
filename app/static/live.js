@@ -12,13 +12,13 @@
 
   const TARGET_RATE = 16000;
   const FRAME_MS = 20;
-  const PREROLL_MS = 300;    // keep audio from just before onset, or words clip
-  const SILENCE_MS = 800;     // pause that ends an utterance
-  const MIN_UTTER_MS = 2500;  // below this we hold and merge -- see carryover
+  const PREROLL_MS = 300; // keep audio from just before onset, or words clip
+  const SILENCE_MS = 800; // pause that ends an utterance
+  const MIN_UTTER_MS = 2500; // below this we hold and merge -- see carryover
   const MAX_UTTER_MS = 18000; // ship anyway, so latency stays bounded
-  const CARRY_MAX_MS = 6000;  // a lone short word still gets sent eventually
+  const CARRY_MAX_MS = 6000; // a lone short word still gets sent eventually
   const ONSET_FRAMES = 2;
-  const ABS_FLOOR = 0.004;   // below this it is a quiet room, not speech
+  const ABS_FLOOR = 0.004; // below this it is a quiet room, not speech
 
   const $ = (id) => document.getElementById(id);
   const FA = "۰۱۲۳۴۵۶۷۸۹";
@@ -33,17 +33,19 @@
       this.stream = null;
       this.node = null;
       this.seq = 0;
+      this.pending = new Set();
+      this.closed = false;
       this.running = false;
 
-      this.acc = [];           // resampled 16k float frames awaiting analysis
+      this.acc = []; // resampled 16k float frames awaiting analysis
       this.accLen = 0;
       this.ratio = 1;
-      this.resampleCarry = 0;   // fractional read index across frame boundaries
+      this.resampleCarry = 0; // fractional read index across frame boundaries
 
-      this.preroll = [];       // ring of recent frames, used as utterance onset
+      this.preroll = []; // ring of recent frames, used as utterance onset
       this.prerollFrames = Math.ceil(PREROLL_MS / FRAME_MS);
-      this.speech = [];        // frames of the utterance being captured
-      this.carry = [];         // too-short speech, held to merge with the next
+      this.speech = []; // frames of the utterance being captured
+      this.carry = []; // too-short speech, held to merge with the next
       this.carryIdle = 0;
       this.speaking = false;
       this.onsetRun = 0;
@@ -60,56 +62,91 @@
         err.code = "INSECURE_ORIGIN";
         throw err;
       }
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (this.ctx.state === "suspended") await this.ctx.resume();
-      this.ratio = this.ctx.sampleRate / TARGET_RATE;
-
-      await this.openSocket();
-
-      const source = this.ctx.createMediaStreamSource(this.stream);
       try {
-        await this.ctx.audioWorklet.addModule("/static/live-worklet.js");
-        this.node = new AudioWorkletNode(this.ctx, "mic-tap");
-        this.node.port.onmessage = (e) => this.ingest(e.data);
-        source.connect(this.node);
-        // Worklets need a sink to be pulled; a muted gain keeps it silent.
-        const sink = this.ctx.createGain();
-        sink.gain.value = 0;
-        this.node.connect(sink).connect(this.ctx.destination);
-      } catch (err) {
-        // Older Safari / insecure contexts without AudioWorklet.
-        const proc = this.ctx.createScriptProcessor(4096, 1, 1);
-        proc.onaudioprocess = (e) => this.ingest(new Float32Array(e.inputBuffer.getChannelData(0)));
-        source.connect(proc);
-        proc.connect(this.ctx.destination);
-        this.node = proc;
-      }
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
 
-      this.running = true;
-      this.on.state("listening");
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state === "suspended") await this.ctx.resume();
+        this.ratio = this.ctx.sampleRate / TARGET_RATE;
+
+        await this.openSocket();
+
+        const source = this.ctx.createMediaStreamSource(this.stream);
+        try {
+          await this.ctx.audioWorklet.addModule("/static/live-worklet.js");
+          this.node = new AudioWorkletNode(this.ctx, "mic-tap");
+          this.node.port.onmessage = (e) => this.ingest(e.data);
+          source.connect(this.node);
+          // Worklets need a sink to be pulled; a muted gain keeps it silent.
+          const sink = this.ctx.createGain();
+          sink.gain.value = 0;
+          this.node.connect(sink).connect(this.ctx.destination);
+        } catch (err) {
+          // Older Safari / insecure contexts without AudioWorklet.
+          const proc = this.ctx.createScriptProcessor(4096, 1, 1);
+          proc.onaudioprocess = (e) =>
+            this.ingest(new Float32Array(e.inputBuffer.getChannelData(0)));
+          source.connect(proc);
+          proc.connect(this.ctx.destination);
+          this.node = proc;
+        }
+
+        this.running = true;
+        this.on.state("listening");
+      } catch (err) {
+        await this.release();
+        this.ws?.close();
+        throw err;
+      }
     }
 
     openSocket() {
       return new Promise((resolve, reject) => {
         const scheme = location.protocol === "https:" ? "wss" : "ws";
-        this.ws = new WebSocket(`${scheme}://${location.host}/ws/sessions/${this.jobId}/live`);
+        this.ws = new WebSocket(
+          `${scheme}://${location.host}/ws/sessions/${this.jobId}/live`,
+        );
         this.ws.binaryType = "arraybuffer";
         let settled = false;
+        const timeout = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            this.ws.close();
+            reject(new Error("زمان اتصال به سرور تمام شد"));
+          }
+        }, 20000);
+        this.ws.addEventListener("close", () => clearTimeout(timeout));
 
         this.ws.addEventListener("message", (e) => {
           let msg;
-          try { msg = JSON.parse(e.data); } catch (_) { return; }
-          if (msg.type === "ready") { settled = true; resolve(); return; }
+          try {
+            msg = JSON.parse(e.data);
+          } catch (_) {
+            return;
+          }
+          if (msg.type === "ready") {
+            clearTimeout(timeout);
+            settled = true;
+            resolve();
+            return;
+          }
+          if (["block", "empty", "dropped", "error"].includes(msg.type))
+            this.pending.delete(msg.client_seq);
+          if (msg.type === "finished") {
+            this.finishResolve?.();
+            return;
+          }
           if (msg.type === "error" && msg.fatal) {
+            clearTimeout(timeout);
+            this.on.message(msg);
+            this.release();
             settled = true;
             reject(new Error(msg.message || "اتصال برقرار نشد"));
             return;
@@ -117,11 +154,24 @@
           this.on.message(msg);
         });
         this.ws.addEventListener("error", () => {
-          if (!settled) { settled = true; reject(new Error("اتصال به سرور برقرار نشد")); }
+          if (!settled) {
+            settled = true;
+            reject(new Error("اتصال به سرور برقرار نشد"));
+          }
         });
         this.ws.addEventListener("close", () => {
-          if (!settled) { settled = true; reject(new Error("اتصال بسته شد")); }
-          else if (this.running) this.on.state("disconnected");
+          if (!settled) {
+            settled = true;
+            reject(new Error("اتصال بسته شد"));
+          } else if (this.running) {
+            this.release();
+            this.on.state("disconnected");
+          }
+          this.finishReject?.(
+            new Error(
+              "ارتباط پیش از تأیید ذخیره قطع شد؛ متن ذخیره‌شده را بررسی کنید",
+            ),
+          );
         });
       });
     }
@@ -139,7 +189,7 @@
       this.acc.push(Float32Array.from(out));
       this.accLen += out.length;
 
-      const frameLen = Math.round(TARGET_RATE * FRAME_MS / 1000);
+      const frameLen = Math.round((TARGET_RATE * FRAME_MS) / 1000);
       while (this.accLen >= frameLen) {
         const chunk = this.take(frameLen);
         this.analyse(chunk);
@@ -174,9 +224,10 @@
       // Track the quiet floor so a noisy room raises the bar instead of
       // transcribing its own hum forever.
       if (!this.speaking) {
-        this.noiseFloor = rms < this.noiseFloor
-          ? this.noiseFloor * 0.9 + rms * 0.1
-          : this.noiseFloor * 0.995 + rms * 0.005;
+        this.noiseFloor =
+          rms < this.noiseFloor
+            ? this.noiseFloor * 0.9 + rms * 0.1
+            : this.noiseFloor * 0.995 + rms * 0.005;
       }
       const threshold = Math.max(ABS_FLOOR, this.noiseFloor * 2.5);
       const voiced = rms > threshold;
@@ -207,7 +258,7 @@
               this.speech = this.carry;
               this.carry = [];
               this.carryIdle = 0;
-              this.ship();   // a single short word deserves its own block
+              this.ship(); // a single short word deserves its own block
             }
           }
         }
@@ -249,7 +300,8 @@
     ship() {
       const frames = this.speech;
       this.reset();
-      if (!frames.length || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      if (!frames.length || !this.ws || this.ws.readyState !== WebSocket.OPEN)
+        return;
 
       let total = 0;
       for (const f of frames) total += f.length;
@@ -266,20 +318,77 @@
       const payload = new Uint8Array(4 + pcm.byteLength);
       new DataView(payload.buffer).setUint32(0, seq, true);
       payload.set(new Uint8Array(pcm.buffer), 4);
+      if (this.pending.size >= 3 || this.ws.bufferedAmount > 2000000) {
+        this.on.message({
+          type: "error",
+          message:
+            "سرعت تبدیل کمتر از گفتار است؛ کمی مکث کنید. این بخش ارسال نشد.",
+        });
+        return;
+      }
+      this.pending.add(seq);
       this.ws.send(payload);
-      this.on.sent(seq, Math.round(total / TARGET_RATE * 1000));
+      this.on.sent(seq, Math.round((total / TARGET_RATE) * 1000));
+    }
+
+    async release() {
+      this.running = false;
+      if (this.node) {
+        if (this.node.port) this.node.port.onmessage = null;
+        this.node.onaudioprocess = null;
+        try {
+          this.node.disconnect();
+        } catch (_) {}
+      }
+      this.stream?.getTracks().forEach((t) => t.stop());
+      if (this.ctx && this.ctx.state !== "closed") {
+        try {
+          await this.ctx.close();
+        } catch (_) {}
+      }
     }
 
     async stop() {
-      this.running = false;
-      // On stop, send whatever is buffered regardless of length -- the user is
-      // done talking, so there is no "next utterance" to merge into.
-      if (this.carry.length) { this.speech = this.carry.concat(this.speech); this.carry = []; }
+      if (this.stopping) return this.stopping;
+      this.stopping = this.finish();
+      return this.stopping;
+    }
+
+    async finish() {
+      // Finish capture first, but keep the socket until every submitted chunk
+      // is acknowledged. Closing immediately used to lose the final sentence.
+      if (this.carry.length) {
+        this.speech = this.carry.concat(this.speech);
+        this.carry = [];
+      }
       if (this.speech.length) this.ship();
-      if (this.node) { try { this.node.disconnect(); } catch (_) {} }
-      if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
-      if (this.ctx) { try { await this.ctx.close(); } catch (_) {} }
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.close();
+      await this.release();
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.on.state("finishing");
+        try {
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(
+              () =>
+                reject(
+                  new Error("ذخیره هنوز تأیید نشده؛ متن جلسه را بررسی کنید"),
+                ),
+              120000,
+            );
+            this.finishResolve = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            this.finishReject = (e) => {
+              clearTimeout(timer);
+              reject(e);
+            };
+            this.ws.send(JSON.stringify({ type: "finish" }));
+          });
+        } finally {
+          this.finishReject = null;
+          this.ws.close();
+        }
+      }
       this.on.state("stopped");
     }
   }

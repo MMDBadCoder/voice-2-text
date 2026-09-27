@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block page_title %}{{ job.display_title }} — {{ title }}{% endblock %}
-{% block page_class %}page-doc doc{% endblock %}
+{% block page_class %}page-studio doc{% endblock %}
 {% block topbar %}
 <button class="iconbtn" onclick="location.href='/'" aria-label="بازگشت"><svg><use href="#i-back"/></svg></button>
 <h1>{{ job.display_title }}</h1>
@@ -19,20 +19,24 @@
 </details>
 {% endblock %}
 {% block content %}
+<div class="studio-label"><span class="eyebrow">استودیوی جلسه</span><span class="tiny muted">متن‌ها به‌صورت خودکار ذخیره می‌شوند</span></div>
 <div class="doc-head">
   <h1>{{ job.display_title }}</h1>
   <div class="doc-meta" id="session-summary"></div>
 </div>
 
+<div class="studio-actions"><button class="btn primary" id="finish-session"><svg><use href="#i-lock"/></svg>پایان جلسه و دریافت متن</button><label class="btn" for="clip-input"><svg><use href="#i-upload"/></svg>افزودن فایل صوتی</label></div>
+<section class="transcript-paper"><div class="paper-heading"><span><svg><use href="#i-file"/></svg>متن گفت‌وگو</span><span class="tiny muted">برای ویرایش، روی متن کلیک کنید</span></div>
 <p id="live-error" class="notice bad" role="alert" hidden></p>
 
 <div class="blocks" id="live-transcript" aria-live="polite"></div>
 
 <div class="blank" id="transcript-empty">
-  <h3>هنوز چیزی گفته نشده</h3>
+  <span class="empty-mic"><svg><use href="#i-mic"/></svg></span><h3>این صفحه منتظر صدای شماست</h3>
   <p>دکمهٔ میکروفن را بزنید و صحبت کنید — هر بار که مکث کنید، همان جمله نوشته می‌شود.</p>
 </div>
 
+</section>
 <section id="clip-section" hidden style="margin-top:40px">
   <h2 style="font-size:15px;color:var(--ink-3);margin-bottom:8px">فایل‌های صوتی</h2>
   <div id="clip-list"></div>
@@ -41,7 +45,7 @@
 
 <div class="composer" id="composer">
   <div class="composer-inner">
-    <button class="mic-btn" id="live-start" aria-label="شروع ضبط زنده"><svg><use href="#i-mic"/></svg></button>
+    <button class="mic-btn" id="live-start" title="شروع رونویسی زنده" aria-label="شروع ضبط زنده"><svg><use href="#i-mic"/></svg></button>
     <button class="mic-btn on" id="live-stop" hidden aria-label="توقف ضبط"><svg><use href="#i-stop"/></svg></button>
     <div class="composer-body">
       <div class="composer-line">
@@ -49,7 +53,7 @@
         <span class="tiny dim" id="live-latency"></span>
       </div>
       <div class="wave" id="level-meter" aria-hidden="true"></div>
-      <div class="composer-hint">برای شروع، میکروفن را بزنید</div>
+      <div class="composer-hint">شروع ضبط زنده · بعد از مکث، متن ظاهر می‌شود</div>
     </div>
     <label class="iconbtn" id="clip-dropzone" for="clip-input" title="افزودن فایل صوتی">
       <input type="file" id="clip-input" class="file-input" accept=".{{ allowed|join(',.') }}" multiple>
@@ -76,7 +80,7 @@
 {% endblock %}
 {% block scripts %}<script>window.APP = {page:"session", jobId: {{ job.id|tojson }}, maxMb: {{ max_upload_mb }}};</script>{% endblock %}
 {% block page_scripts %}
-<script src="/static/sessions.js?v=8" defer></script>
-<script src="/static/live.js?v=9" defer></script>
-<script src="/static/live-ui.js?v=8" defer></script>
+<script src="/static/sessions.js?v=10" defer></script>
+<script src="/static/live.js?v=10" defer></script>
+<script src="/static/live-ui.js?v=10" defer></script>
 {% endblock %}

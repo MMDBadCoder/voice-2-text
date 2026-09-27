@@ -153,6 +153,14 @@ def run_transcription(job_id: str) -> dict:
             "diarized": bool(num_speakers),
             "num_speakers": num_speakers or None,
         }
+        if is_session:
+            # Microphone text has no retained audio; preserve it in every export.
+            from .db import LiveBlock
+            with SessionLocal() as session:
+                mic = session.query(LiveBlock).filter_by(job_id=job_id, source="mic", state="done").order_by(LiveBlock.seq).all()
+            for block in mic:
+                result.segments.append(asr.Segment(start=result.duration, end=result.duration, text=block.text))
+            meta["live_text_appended"] = bool(mic)
         results.save(job_id, result, meta)
 
         text_chars = sum(len(s.text) for s in result.segments)
@@ -206,11 +214,14 @@ def sweep_retention() -> dict:
     if config.RETENTION_DAYS <= 0:
         return {"deleted": 0, "reason": "retention disabled"}
 
+    from .db import LiveBlock
+
     cutoff = utcnow() - timedelta(days=config.RETENTION_DAYS)
     deleted = 0
     with SessionLocal() as session:
         stale = session.query(Job).filter(Job.created_at < cutoff).all()
         for job in stale:
+            session.query(LiveBlock).filter_by(job_id=job.id).delete()
             for clip in session.query(AudioClip).filter_by(job_id=job.id).all():
                 (config.AUDIO_DIR / clip.stored_name).unlink(missing_ok=True)
                 session.delete(clip)

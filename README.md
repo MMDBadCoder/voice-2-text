@@ -6,11 +6,13 @@ Create a private session, upload or record ordered audio clips, and close it to
 generate readable Persian text. A responsive RTL interface keeps your recordings organized, with search,
 progress, audio playback, timestamps, and downloadable transcripts.
 
-![Persian recording library with sample recordings](docs/images/library.png)
+![Persian recording workspace](docs/images/studio-workspace.png)
 
 ## Features
 
-- Persian RTL interface and locally bundled Vazirmatn fonts; no frontend CDN.
+- Modern Persian RTL studio with dark/light themes and locally bundled fonts.
+- Live microphone transcription after pauses, editable text and live-only exports.
+- Approved accounts, Bale verification and private multi-file sessions.
 - CPU inference with faster-whisper / CTranslate2 and int8 model support.
 - Background queue, progress, cancellation, and retry.
 - Cancellation stops the processing subprocess, including native inference.
@@ -95,3 +97,6 @@ Built with [FastAPI](https://fastapi.tiangolo.com/),
 [CTranslate2](https://github.com/OpenNMT/CTranslate2), and [RQ](https://python-rq.org/).
 Design references: [UI UX Pro Max](https://uupm.cc/#styles) and
 [Impeccable](https://impeccable.style/).
+
+See the [studio redesign and workflow audit](docs/STUDIO_REDESIGN.md) for the
+current interface, live transcription behavior, validation and practical limits.

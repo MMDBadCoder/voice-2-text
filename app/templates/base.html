@@ -7,7 +7,9 @@
   <meta name="theme-color" content="#08090a">
   <title>{% block page_title %}{{ title }}{% endblock %}</title>
   <link rel="preload" href="/static/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/app.css?v=8">
+  <link rel="stylesheet" href="/static/app.css?v=10">
+  <link rel="stylesheet" href="/static/studio.css?v=10">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("vazhe-theme")||"dark"}catch(e){}</script>
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 </head>
 <body>
@@ -29,6 +31,8 @@
       <input id="session-search" type="search" placeholder="جست‌وجو" aria-label="جست‌وجو در جلسه‌ها">
     </div>
 
+    <a class="rail-item workspace-home" href="/"><svg><use href="#i-file"/></svg><span>همهٔ جلسه‌ها</span></a>
+    <div class="rail-section">جلسه‌های اخیر</div>
     <nav class="rail-list" id="rail-list" aria-label="جلسه‌ها"></nav>
 
     <div class="rail-foot">
@@ -60,7 +64,7 @@
   </div>
 </div>
 {% else %}
-<div class="auth"><div class="auth-box">{% block auth_content %}{% endblock %}</div></div>
+<div class="auth"><aside class="auth-story"><span class="eyebrow">واژه / استودیوی گفت‌وگو</span><h1>فکرها را بگویید.<br><span>واژه‌ها می‌مانند.</span></h1><p>یک فضای آرام برای ضبط گفت‌وگو، تبدیل صدا به متن و کنار هم نگه‌داشتن ایده‌ها.</p><div class="auth-wave" aria-hidden="true">{% for h in [20,36,60,42,85,100,65,40,70,95,56,32,48,24] %}<i style="--height:{{ h }}%"></i>{% endfor %}</div><div class="story-foot"><span>فارسی، از ابتدا</span><span>پردازش روی سرور شما</span></div></aside><div class="auth-box">{% block auth_content %}{% endblock %}</div></div>
 {% endif %}
 
 <div id="toast" class="toast" role="status" hidden></div>
@@ -93,7 +97,7 @@
 
 {% block scripts %}{% endblock %}
 <script src="/static/common.js?v=8" defer></script>
-<script src="/static/shell.js?v=8" defer></script>
+<script src="/static/shell.js?v=10" defer></script>
 <script src="/static/app.js?v=8" defer></script>
 {% block page_scripts %}{% endblock %}
 </body>

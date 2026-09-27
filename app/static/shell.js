@@ -1,7 +1,8 @@
 /** App shell: sidebar session list, drawer, theme, new-session dialog. */
 (function () {
   "use strict";
-  const V = window.Vazhe; if (!V) return;
+  const V = window.Vazhe;
+  if (!V) return;
   const { api, esc, fa, toast } = V;
   const $ = (id) => document.getElementById(id);
 
@@ -12,9 +13,17 @@
     if (saved) document.documentElement.dataset.theme = saved;
   } catch (_) {}
   $("theme-btn")?.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    const next =
+      (document.documentElement.dataset.theme ||
+        (matchMedia("(prefers-color-scheme: light)").matches
+          ? "light"
+          : "dark")) === "light"
+        ? "dark"
+        : "light";
     document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (_) {}
   });
 
   /* ---- mobile drawer --------------------------------------------------- */
@@ -22,7 +31,8 @@
   let scrim;
   function closeRail() {
     rail?.classList.remove("open");
-    scrim?.remove(); scrim = null;
+    scrim?.remove();
+    scrim = null;
   }
   $("rail-toggle")?.addEventListener("click", () => {
     if (!rail) return;
@@ -32,7 +42,9 @@
     scrim.addEventListener("click", closeRail);
     document.body.appendChild(scrim);
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRail(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeRail();
+  });
 
   /* ---- sidebar session list -------------------------------------------- */
   const railList = $("rail-list");
@@ -51,17 +63,31 @@
         const cur = here === href ? ' aria-current="page"' : "";
         return `<a class="rail-item" href="${href}"${cur}><span class="dot ${esc(STATE(j))}"></span><span class="t">${esc(j.display_title)}</span></a>`;
       };
-      if (open.length) html += `<div class="rail-section">باز</div>` + open.map(row).join("");
-      if (rest.length) html += `<div class="rail-section">بایگانی</div>` + rest.map(row).join("");
-      railList.innerHTML = html || `<p class="tiny dim" style="padding:8px 10px">هنوز جلسه‌ای ندارید</p>`;
-    } catch (_) { /* the page itself will surface auth/network errors */ }
+      if (open.length)
+        html += `<div class="rail-section">باز</div>` + open.map(row).join("");
+      if (rest.length)
+        html +=
+          `<div class="rail-section">بایگانی</div>` + rest.map(row).join("");
+      railList.innerHTML =
+        html ||
+        `<p class="tiny dim" style="padding:8px 10px">هنوز جلسه‌ای ندارید</p>`;
+    } catch (_) {
+      /* the page itself will surface auth/network errors */
+    }
   }
   loadRail();
   window.VazheRail = { reload: loadRail };
 
   /* ---- new session ------------------------------------------------------ */
   const dlg = $("new-session-dialog");
-  $("new-session-btn")?.addEventListener("click", () => { closeRail(); dlg?.showModal(); });
+  document
+    .querySelectorAll("#new-session-btn, [data-new-session]")
+    .forEach((btn) =>
+      btn.addEventListener("click", () => {
+        closeRail();
+        dlg?.showModal();
+      }),
+    );
   $("dismiss-new-session")?.addEventListener("click", () => dlg?.close());
   $("new-session-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -69,11 +95,16 @@
     const err = $("create-error");
     const title = $("session-title").value.trim();
     const tier = dlg.querySelector('[name="tier"]:checked')?.value || "";
-    if (!title) { err.textContent = "عنوان جلسه را وارد کنید"; return; }
-    btn.disabled = true; err.textContent = "";
+    if (!title) {
+      err.textContent = "عنوان جلسه را وارد کنید";
+      return;
+    }
+    btn.disabled = true;
+    err.textContent = "";
     try {
       const job = await api("/api/sessions", {
-        method: "POST", body: JSON.stringify({ title, tier }),
+        method: "POST",
+        body: JSON.stringify({ title, tier }),
       });
       location.href = `/sessions/${job.id}`;
     } catch (ex) {

@@ -1,10 +1,17 @@
 {% extends "base.html" %}
 {% block topbar %}<h1>جلسه‌ها</h1><span class="spacer"></span><span class="tiny dim" id="session-count"></span>{% endblock %}
 {% block content %}
-<div class="hero">
-  <h1>گفت‌وگوها، کنار هم.</h1>
-  <p>یک جلسه باز کنید و شروع کنید به حرف زدن — متن همان لحظه نوشته می‌شود. فایل صوتی هم می‌توانید بیفزایید.</p>
+<section class="workspace-hero">
+  <div><span class="eyebrow">فضای کار شما / واژه</span><h1>از صدا،<br><span>به ایده‌های ماندگار.</span></h1>
+  <p>گفت‌وگو را ضبط کنید، متن را همان‌جا ببینید و روی چیزی که مهم است تمرکز کنید.</p>
+  <button class="btn primary lg" data-new-session><svg><use href="#i-mic"/></svg>شروع یک جلسه</button></div>
+  <div class="sound-art" aria-hidden="true"><span class="orbit"></span><div class="sound-bars">{% for h in [18,32,48,26,64,82,45,100,70,92,56,76,40,58,28,44,22] %}<i style="--height:{{ h }}%"></i>{% endfor %}</div><span class="sound-label">صدا · مکث · واژه</span></div>
+</section>
+<div class="workspace-actions">
+  <button class="action-tile" data-new-session><span class="action-icon"><svg><use href="#i-mic"/></svg></span><span><strong>رونویسی زنده</strong><small>صحبت کنید؛ بعد از مکث، متن را ببینید</small></span><svg><use href="#i-back"/></svg></button>
+  <button class="action-tile" data-new-session><span class="action-icon aqua"><svg><use href="#i-upload"/></svg></span><span><strong>تبدیل فایل صوتی</strong><small>چند فایل، یک جلسهٔ مرتب</small></span><svg><use href="#i-back"/></svg></button>
 </div>
+<div class="section-title"><div><span class="eyebrow">کتابخانه</span><h2>جلسه‌های شما</h2></div><span class="tiny muted">ادامه از جایی که مانده‌اید</span></div>
 <div class="segmented" role="group" aria-label="فیلتر" style="margin-bottom:20px">
   <button data-session-filter="" aria-pressed="true">همه</button>
   <button data-session-filter="open" aria-pressed="false">باز</button>
