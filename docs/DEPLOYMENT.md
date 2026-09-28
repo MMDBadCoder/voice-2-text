@@ -74,7 +74,7 @@ On the connected machine, prepare the model bundle and build the app:
 docker compose build
 docker pull redis:7-alpine
 mkdir -p bundle/images
-docker save voice-2-text:0.1.0 redis:7-alpine -o bundle/images/runtime.tar
+docker save voice-2-text:0.2.0 redis:7-alpine -o bundle/images/runtime.tar
 ```
 
 Transfer the source tree and `bundle/` to the target. On the target:
@@ -119,7 +119,7 @@ machine. Transfer the source and bundle, load the images, then run:
 ```bash
 docker load -i bundle/images/python-3.11-slim.tar
 docker load -i bundle/images/redis-7-alpine.tar
-docker build --network=none --pull=false -f Dockerfile.offline -t voice-2-text:0.1.0 .
+docker build --network=none --pull=false -f Dockerfile.offline -t voice-2-text:0.2.0 .
 ```
 
 Install model directories and configure `.env` as above; start with

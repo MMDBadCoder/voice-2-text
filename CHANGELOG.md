@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.2.0 — 2026-09-28
+
+### Added
+
+- Phone-based accounts with Bale verification, password or code login, password
+  recovery/change, administrator approval and private workspaces.
+- Titled sessions with multiple ordered audio files, browser recording and
+  live microphone transcription using the installed local Whisper model.
+- Editable live transcripts, live-only finalization and downloadable exports.
+- Modern Persian RTL studio, responsive mobile navigation and dark/light themes.
+- Updated architecture, account deployment and workflow audit documentation.
+
+### Fixed
+
+- Wait for the final transcription acknowledgement before stopping capture.
+- Preserve microphone text when exporting sessions that also contain uploads.
+- Refresh completed file transcripts without interrupting active edits.
+- Preserve uploads when queueing fails and allow processing retries.
+- Prevent duplicate upload runners and premature session finalization.
+- Recheck access on live connections and reject malformed audio frames.
+- Remove transcript blocks when clips, sessions or expired records are deleted.
+- Restore the deployed worker using a dedicated localhost-only Redis instance.
+
+### Upgrade
+
+Back up the database and audio/results directories before upgrading. Configure
+bootstrap administrator credentials and Bale settings in private `.env` before
+starting. Existing unowned recordings are assigned to the bootstrap administrator;
+existing account passwords are preserved. Enable the Compose `accounts` profile
+for the Bale polling service. See [account setup](docs/ACCOUNTS_SETUP.md).
+
+### Validation and limits
+
+- 92 automated tests passed.
+- Browser microphone → real local model → saved text → export verified.
+- Production upload, queue, worker, finalization and export checks passed.
+- Docker build and Python 3.11 container startup verified.
+- Live text appears after pauses and inference, not word by word.
+- Remote HTTP recording requires a browser trusted-origin exception; HTTPS
+  or localhost also work.
+- Bale delivery is mocked in automated tests; actual contact sharing requires
+  verification with a real Bale client and network access to Bale.
+
+See the [workflow audit](docs/STUDIO_REDESIGN.md) for detailed behavior and limits.
+
 ## 0.1.0 — 2026-09-14
 
 Initial public release.
@@ -30,43 +75,4 @@ Initial public release.
 - Desktop/mobile browser checks for primary user flows.
 - Live accurate-model cancellation, successful retry and Word export.
 
-See [known limits](docs/ARCHITECTURE.md#known-limits-in-010) before deployment.
-
-## 0.3.0 — رونویسی زنده و بازطراحی
-
-### رونویسی زندهٔ میکروفن / Live microphone transcription
-- جلسهٔ باز اکنون یک متن روبه‌رشد دارد که با صحبت کردن کامل می‌شود.
-- The browser segments speech itself: it watches microphone energy and ships
-  one complete utterance per pause. Whisper is not a streaming model, so a
-  sliding window would re-decode the same audio and rewrite words under the
-  reader; cutting at a pause means each piece is decoded once and never changes.
-- Speech shorter than the minimum is **carried over into the next utterance**
-  rather than discarded, so a lone "بله" is never silently lost. A carried
-  fragment is shipped on its own after 6 s if no further speech follows.
-- Whisper pads every call to a 30-second window, so a 2-second chunk costs
-  nearly what a 10-second chunk costs. Utterance targets are therefore long
-  (2.5–18 s), which is both faster per second of audio and more accurate.
-- Live work bypasses the RQ queue and runs in the API process against its own
-  warm model, bounded by a semaphore; a queued live chunk would sit behind a
-  40-minute meeting and "live" would mean nothing.
-- Blocks are editable and deletable inline; each is persisted as it arrives.
-- Uploaded files reserve their transcript slot immediately and are filled in by
-  the queue, so a file lands where the user dropped it rather than wherever the
-  queue happened to finish.
-- Live uses the session's own tier, so live text and the final transcript agree.
-
-### طراحی / Design
-- Rebuilt design system: neutral oklch palette with a single accent, borders
-  instead of shadows, consistent radii, and a 20/16/14/12 type scale.
-- Status is a dot and a word, not a coloured pill on every row.
-- Inline SVG icon sprite replaces the `＋ ⌄ ← ↓` glyphs.
-- Removed the "eyebrow" labels and explanatory paragraphs above every section.
-- Session tiles compacted from five stacked lines to two.
-- Motion: 150 ms hover lift, 160 ms press, 380 ms row entry staggered 70 ms.
-- Full dark mode, and `prefers-reduced-motion` honoured.
-
-### اصلاح‌ها / Fixes
-- The minimum-utterance guard sat after the backend switch, so a stray click
-  created an empty transcript block under the stub backend.
-- Repetition collapse now triggers at three repeats instead of five; live
-  chunks are short and produced "بگویم بگویم بگویم" in a real run.
+See [known limits](docs/ARCHITECTURE.md#known-limits) before deployment.

@@ -7,7 +7,7 @@
 
 x-common: &common
   build: .
-  image: voice-2-text:0.1.0
+  image: voice-2-text:0.2.0
   env_file: [.env]
   environment:
     REDIS_URL: redis://redis:6379/0
